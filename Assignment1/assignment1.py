@@ -1,7 +1,3 @@
-"""
-
-"""
-
 import argparse
 import multiprocessing
 import csv
@@ -48,19 +44,20 @@ def main():
                 aggregated_scores = [sum(scores) for scores in zip(*results)]
                 average_scores = [x / len(results) for x in aggregated_scores]
 
+                formatted_scores = [(i, score) for i, score in enumerate(average_scores)]
+
                 if args.o:
                     output_file_name = f"{fastq_path}.output.csv"
                     with open(output_file_name, "w", newline="") as csvfile:
                         writer = csv.writer(csvfile)
-                        writer.writerow(average_scores)
+                        writer.writerows(formatted_scores)
                     print(f"Output for {fastq_path} written to {output_file_name}")
                 else:
-                    print(f"{fastq_path}: {','.join(map(str, average_scores))}")
+                    for index, score in formatted_scores:
+                        print(f"{index},{score}")
 
     end_time = time.time()  # End timing
-    print(
-        f"Execution time: {end_time - start_time:.2f} seconds"
-    )  # Print the execution time
+    print(f"Execution time: {end_time - start_time:.2f} seconds")  # Print the execution time
 
 
 if __name__ == "__main__":
