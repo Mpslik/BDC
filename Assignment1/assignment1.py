@@ -1,7 +1,13 @@
+"""
+this program calculates the average PHRED scores from FastQ files per base.
+
+"""
 # METADATA
 __author__ = "Mats Slik"
 __version__ = "0.6"
 
+
+# Imports
 import argparse
 import multiprocessing
 import csv
@@ -10,6 +16,7 @@ import os
 import numpy as np
 
 
+# Code
 def compute_phred_scores(quality_str):
     """Convert a quality string into PHRED scores."""
     return np.array([ord(char) - 33 for char in quality_str])
@@ -20,6 +27,7 @@ def process_chunk(quality_lines):
     phred_arrays = [compute_phred_scores(line.strip()) for line in quality_lines if line]
     if not phred_arrays:
         return None
+
     combined_array = np.stack(phred_arrays)
     sum_scores = np.sum(combined_array, axis=0)
     return sum_scores, len(phred_arrays)
@@ -51,9 +59,6 @@ def main():
     parser.add_argument("fastq_files", nargs="+", help="FastQ files to process")
     args = parser.parse_args()
 
-    # Determine the directory of the script
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-
     with multiprocessing.Pool(args.n) as pool:
         for fastq_path in args.fastq_files:
             with open(fastq_path, "r") as fastq_file:
@@ -63,7 +68,7 @@ def main():
 
                 if average_scores is not None:
                     if args.o:
-                        output_file_name = os.path.join(script_dir, f"{os.path.basename(fastq_path)}.output.csv")
+                        output_file_name = f"{os.path.splitext(fastq_path)[0]}.output.csv"
                         with open(output_file_name, "w", newline="") as csvfile:
                             writer = csv.writer(csvfile)
                             writer.writerows(enumerate(average_scores))
