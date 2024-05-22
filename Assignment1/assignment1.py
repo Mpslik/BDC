@@ -2,6 +2,7 @@ import argparse
 import multiprocessing
 import csv
 import time
+import os
 
 
 def compute_phred_scores(quality_str):
@@ -35,6 +36,8 @@ def main():
     parser.add_argument("fastq_files", nargs="+", help="FastQ files to process")
     args = parser.parse_args()
 
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
     with multiprocessing.Pool(args.n) as pool:
         for fastq_path in args.fastq_files:
             with open(fastq_path, "r") as fastq_file:
@@ -47,7 +50,7 @@ def main():
                 formatted_scores = [(i, score) for i, score in enumerate(average_scores)]
 
                 if args.o:
-                    output_file_name = f"{fastq_path}.output.csv"
+                    output_file_name = os.path.join(script_dir, f"{os.path.basename(fastq_path)}.output.csv")
                     with open(output_file_name, "w", newline="") as csvfile:
                         writer = csv.writer(csvfile)
                         writer.writerows(formatted_scores)
