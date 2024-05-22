@@ -15,17 +15,6 @@ def compute_phred_scores(quality_str):
     return np.array([ord(char) - 33 for char in quality_str])
 
 
-def process_file(fastq_path, n_cores):
-    """Process an individual FastQ file to calculate average PHRED scores."""
-    with open(fastq_path, "r") as fastq_file:
-        quality_lines = [line.strip() for i, line in enumerate(fastq_file) if i % 4 == 3]
-    if not quality_lines:
-        return fastq_path, None
-    with multiprocessing.Pool(n_cores) as pool:
-        results = pool.map(process_chunk, [quality_lines[i::n_cores] for i in range(n_cores)])
-    return fastq_path, aggregate_results(results)
-
-
 def process_chunk(quality_lines):
     """Process a chunk of quality lines to calculate cumulative PHRED scores."""
     phred_arrays = [compute_phred_scores(line.strip()) for line in quality_lines if line]
@@ -62,30 +51,26 @@ def main():
     parser.add_argument("fastq_files", nargs="+", help="FastQ files to process")
     args = parser.parse_args()
 
+    # Determine the directory of the script
     script_dir = os.path.dirname(os.path.abspath(__file__))
 
-    results = []
     with multiprocessing.Pool(args.n) as pool:
-        # Map each file to the process_file function
-        result_objects = [pool.apply_async(process_file, args=(fastq_path, args.n)) for fastq_path in args.fastq_files]
-        # Collect results as they come in
-        for result in result_objects:
-            results.append(result.get())
+        for fastq_path in args.fastq_files:
+            with open(fastq_path, "r") as fastq_file:
+                quality_lines = [line.strip() for i, line in enumerate(fastq_file) if i % 4 == 3]
+                results = pool.map(process_chunk, [quality_lines[i::args.n] for i in range(args.n)])
+                average_scores = aggregate_results(results)
 
-    for fastq_path, average_scores in results:
-        if average_scores is not None:
-            if args.o:
-                output_file_name = os.path.join(script_dir, f"{os.path.basename(fastq_path)}.output.csv")
-                with open(output_file_name, "w", newline="") as csvfile:
-                    writer = csv.writer(csvfile)
-                    writer.writerows(enumerate(average_scores))
-                print(f"Output for {fastq_path} written to {output_file_name}")
-            else:
-                print(f"Results for {fastq_path}:")
-                for index, score in enumerate(average_scores):
-                    print(f"{index},{score}")
-        else:
-            print(f"No valid data to process in {fastq_path}")
+                if average_scores is not None:
+                    if args.o:
+                        output_file_name = os.path.join(script_dir, f"{os.path.basename(fastq_path)}.output.csv")
+                        with open(output_file_name, "w", newline="") as csvfile:
+                            writer = csv.writer(csvfile)
+                            writer.writerows(enumerate(average_scores))
+                        print(f"Output for {fastq_path} written to {output_file_name}")
+                    else:
+                        for index, score in enumerate(average_scores):
+                            print(f"{index},{score}")
 
     print(f"Execution time: {time.time() - start_time:.2f} seconds")
 
