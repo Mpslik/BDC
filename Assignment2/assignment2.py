@@ -72,7 +72,8 @@ class PhredScoreCalculator:
             for i in range(0, len(lines), chunk_size):
                 yield lines[i:i + chunk_size]
 
-    def calculate_scores(self, chunk):
+    @staticmethod
+    def calculate_scores(chunk):
         """Calculate average PHRED scores from a list of FastQ quality lines."""
         score_sums = defaultdict(list)
         for line in chunk:
