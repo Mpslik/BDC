@@ -48,15 +48,18 @@ import time
 import os
 import numpy as np
 
+import argparse
+import multiprocessing
+import csv
+import os
+import numpy as np
 
-# Code
 def compute_phred_scores(quality_str):
-    """Convert a quality string into PHRED scores."""
+    """ Convert a quality string into PHRED scores. """
     return np.array([ord(char) - 33 for char in quality_str])
 
-
 def process_chunk(quality_lines):
-    """Process a chunk of quality lines to calculate cumulative PHRED scores."""
+    """ Process a chunk of quality lines to calculate cumulative PHRED scores. """
     phred_arrays = [compute_phred_scores(line.strip()) for line in quality_lines if line]
     if not phred_arrays:
         return None
@@ -65,9 +68,8 @@ def process_chunk(quality_lines):
     sum_scores = np.sum(combined_array, axis=0)
     return sum_scores, len(phred_arrays)
 
-
 def aggregate_results(results):
-    """Aggregate results from all chunks, calculating average PHRED scores."""
+    """ Aggregate results from all chunks, calculating average PHRED scores. """
     total_sum = None
     total_count = 0
     for result in results:
@@ -81,11 +83,8 @@ def aggregate_results(results):
         total_count += count
     return total_sum / total_count if total_count > 0 else None
 
-
 def main():
-    """Main function."""
-    start_time = time.time()
-
+    """ Main function. """
     parser = argparse.ArgumentParser(description="Calculate average PHRED scores from FastQ files.")
     parser.add_argument("-n", required=True, type=int, help="Number of cores to use.")
     parser.add_argument("-o", action="store_true", help="Output results to individual CSV files")
@@ -109,9 +108,6 @@ def main():
                     else:
                         for index, score in enumerate(average_scores):
                             print(f"{index},{score}")
-
-    print(f"Execution time: {time.time() - start_time:.2f} seconds")
-
 
 if __name__ == "__main__":
     main()
