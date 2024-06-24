@@ -23,7 +23,7 @@ from collections import defaultdict
 
 # Constants
 POISON_PILL = "TERMINATE"
-AUTHKEY = b'secretkey'
+AUTHKEY = b"secretkey"
 
 
 # Utility functions
@@ -34,22 +34,45 @@ def compute_phred_scores(line):
 
 def parse_cli_args():
     """Parse command-line arguments to configure the script execution mode and parameters."""
-    parser = argparse.ArgumentParser(description="Distributed PHRED score calculator for FastQ files.")
+    parser = argparse.ArgumentParser(
+        description="Distributed PHRED score calculator for FastQ files."
+    )
     parser.add_argument("--host", required=True, help="Hostname for the server.")
-    parser.add_argument("--port", required=True, type=int, help="Port for server communication.")
+    parser.add_argument(
+        "--port", required=True, type=int, help="Port for server communication."
+    )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-s", "--server", action="store_true", help="Run in server mode.")
-    group.add_argument("-c", "--client", action="store_true", help="Run in client mode.")
-    parser.add_argument("--chunks", type=int, default=4, help="Number of chunks to split the input files.")
-    parser.add_argument("-o", "--output", type=Path, help="Output file path (default is STDOUT).")
-    parser.add_argument("-n", "--num_cores", type=int, default=mp.cpu_count(),
-                        help="Number of cores to use in client mode.")
-    parser.add_argument("fastq_files", nargs="*", type=Path, help="Paths to FastQ files to process.")
+    group.add_argument(
+        "-s", "--server", action="store_true", help="Run in server mode."
+    )
+    group.add_argument(
+        "-c", "--client", action="store_true", help="Run in client mode."
+    )
+    parser.add_argument(
+        "--chunks",
+        type=int,
+        default=4,
+        help="Number of chunks to split the input files.",
+    )
+    parser.add_argument(
+        "-o", "--output", type=Path, help="Output file path (default is STDOUT)."
+    )
+    parser.add_argument(
+        "-n",
+        "--num_cores",
+        type=int,
+        default=mp.cpu_count(),
+        help="Number of cores to use in client mode.",
+    )
+    parser.add_argument(
+        "fastq_files", nargs="*", type=Path, help="Paths to FastQ files to process."
+    )
     return parser.parse_args()
 
 
 # Processing classes
-class JobManager(BaseManager): pass
+class JobManager(BaseManager):
+    pass
 
 
 JobManager.register("get_job_queue")
@@ -66,18 +89,18 @@ class PhredScoreCalculator:
 
     def split_into_chunks(self, file_path):
         """Yield chunks of lines from a FastQ file."""
-        with open(file_path, 'r') as file:
+        with open(file_path, "r") as file:
             lines = file.readlines()
             chunk_size = len(lines) // self.chunks + (len(lines) % self.chunks > 0)
             for i in range(0, len(lines), chunk_size):
-                yield lines[i:i + chunk_size]
+                yield lines[i : i + chunk_size]
 
     @staticmethod
     def calculate_scores(chunk):
         """Calculate average PHRED scores from a list of FastQ quality lines."""
         score_sums = defaultdict(list)
         for line in chunk:
-            if line.startswith('+'):
+            if line.startswith("+"):
                 continue  # Skip header lines
             scores = compute_phred_scores(line)
             for idx, score in enumerate(scores):
@@ -116,7 +139,7 @@ class Server(mp.Process):
 
         # Output results
         if self.output:
-            with open(self.output, 'w') as f:
+            with open(self.output, "w") as f:
                 for result in results:
                     f.write(f"{result}\n")
         else:
@@ -154,7 +177,9 @@ class Client(mp.Process):
 def main():
     args = parse_cli_args()
     if args.server:
-        server = Server(args.host, args.port, args.fastq_files, args.output, args.chunks)
+        server = Server(
+            args.host, args.port, args.fastq_files, args.output, args.chunks
+        )
         server.start()
     elif args.client:
         client = Client(args.host, args.port, args.num_cores)
