@@ -72,8 +72,7 @@ class PhredScoreCalculator:
             for i in range(0, len(lines), chunk_size):
                 yield lines[i:i + chunk_size]
 
-    @staticmethod
-    def calculate_scores(chunk):
+    def calculate_scores(self, chunk):
         """Calculate average PHRED scores from a list of FastQ quality lines."""
         score_sums = defaultdict(list)
         for line in chunk:
@@ -87,9 +86,44 @@ class PhredScoreCalculator:
 
 # Server and Client implementations
 class Server(mp.Process):
+    def __init__(self, host, port, files, output, chunks):
+        super().__init__()
+        self.host = host
+        self.port = port
+        self.files = files
+        self.output = output
+        self.chunks = chunks
 
     def run(self):
+        """Manage job distribution and result collection."""
+        manager = JobManager(address=(self.host, self.port), authkey=AUTHKEY)
+        manager.start()
+        job_queue = manager.get_job_queue()
+        result_queue = manager.get_result_queue()
 
+        # Enqueue jobs
+        for file_path in self.files:
+            calculator = PhredScoreCalculator([file_path], chunks=self.chunks)
+            for chunk in calculator.split_into_chunks(file_path):
+                job_queue.put((calculator.calculate_scores, chunk))
+
+        # Collect results
+        results = []
+        while len(results) < len(self.files) * self.chunks:
+            results.append(result_queue.get())
+            print("Collected a result.")
+
+        # Output results
+        if self.output:
+            with open(self.output, 'w') as f:
+                for result in results:
+                    f.write(f"{result}\n")
+        else:
+            for result in results:
+                print(result)
+
+        job_queue.put(POISON_PILL)
+        manager.shutdown()
 
 
 class Client(mp.Process):
