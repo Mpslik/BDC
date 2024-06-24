@@ -44,13 +44,6 @@ __version__ = "1.0"
 import argparse
 import multiprocessing
 import csv
-import time
-import os
-import numpy as np
-
-import argparse
-import multiprocessing
-import csv
 import os
 import numpy as np
 
