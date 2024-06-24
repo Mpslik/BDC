@@ -59,14 +59,30 @@ JobManager.register("get_result_queue")
 class PhredScoreCalculator:
     """Handles the computation of PHRED scores from chunks of FastQ data."""
 
+    def __init__(self, file_paths, output_path=None, chunks=4):
+        self.file_paths = file_paths
+        self.output_path = output_path
+        self.chunks = chunks
 
     def split_into_chunks(self, file_path):
         """Yield chunks of lines from a FastQ file."""
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+            chunk_size = len(lines) // self.chunks + (len(lines) % self.chunks > 0)
+            for i in range(0, len(lines), chunk_size):
+                yield lines[i:i + chunk_size]
 
-
-    def calculate_scores(self, chunk):
+    @staticmethod
+    def calculate_scores(chunk):
         """Calculate average PHRED scores from a list of FastQ quality lines."""
-
+        score_sums = defaultdict(list)
+        for line in chunk:
+            if line.startswith('+'):
+                continue  # Skip header lines
+            scores = compute_phred_scores(line)
+            for idx, score in enumerate(scores):
+                score_sums[idx].append(score)
+        return {pos: np.mean(scores) for pos, scores in score_sums.items()}
 
 
 # Server and Client implementations
