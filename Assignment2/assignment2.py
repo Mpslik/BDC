@@ -127,7 +127,26 @@ class Server(mp.Process):
 
 
 class Client(mp.Process):
+    def __init__(self, host, port, num_cores):
+        super().__init__()
+        self.host = host
+        self.port = port
+        self.num_cores = num_cores
 
+    def run(self):
+        """Process jobs from the server using available cores."""
+        manager = JobManager(address=(self.host, self.port), authkey=AUTHKEY)
+        manager.connect()
+        job_queue = manager.get_job_queue()
+        result_queue = manager.get_result_queue()
+
+        while True:
+            job = job_queue.get()
+            if job == POISON_PILL:
+                break
+            func, data = job
+            result = func(data)
+            result_queue.put(result)
 
 
 # Main execution logic
