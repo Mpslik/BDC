@@ -2,10 +2,8 @@
 
 """Calculate mean PHRED scores per base position from FastQ files using distributed computing.
 
-Examples:
-    $ python phred_score_calculator.py -s --host localhost --port 25715 [--chunks 4] [-o output.csv] fastq_file1.fastq [fastq_file2.fastq ...]
-    $ python phred_score_calculator.py -c --host localhost --port 25715 [-n 4]
-"""
+Examples: $ python phred_score_calculator.py -s --host localhost --port 25715 [--chunks 4] [-o output.csv]
+fastq_file1.fastq [fastq_file2.fastq ...] $ python phred_score_calculator.py -c --host localhost --port 25715 [-n 4]"""
 
 # Metadata
 __author__ = "Mats Slik"
@@ -16,9 +14,6 @@ import multiprocessing as mp
 from pathlib import Path
 from multiprocessing.managers import BaseManager
 import numpy as np
-import os
-import sys
-import time
 from collections import defaultdict
 
 # Constants
@@ -110,6 +105,9 @@ class PhredScoreCalculator:
 
 # Server and Client implementations
 class Server(mp.Process):
+    """
+    Server class for distributing jobs to clients.
+    """
     def __init__(self, host, port, files, output, chunks):
         super().__init__()
         self.host = host
@@ -151,6 +149,9 @@ class Server(mp.Process):
 
 
 class Client(mp.Process):
+    """
+    Client class for processing jobs from the server.
+    """
     def __init__(self, host, port, num_cores):
         super().__init__()
         self.host = host
@@ -175,6 +176,10 @@ class Client(mp.Process):
 
 # Main execution logic
 def main():
+    """
+    Main function.
+    :return:
+    """
     args = parse_cli_args()
     if args.server:
         server = Server(
