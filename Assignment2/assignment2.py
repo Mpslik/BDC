@@ -1,62 +1,72 @@
 #!/usr/bin/env python3
 
-"""Calculate mean PHRED scores per base position from FastQ files using distributed computing.
+"""
+Calculate mean PHRED scores per base position from FastQ files using distributed computing.
 
 Examples:
-    $ python phred_score_calculator.py -s --host localhost --port 25715 [--chunks 4] [-o output.csv]
-    fastq_file1.fastq [fastq_file2.fastq ...]
-    $ python phred_score_calculator.py -c --host localhost --port 25715 [-n 4]
+    $ python assignment2.py -s --host localhost --port 25715 --chunks 4 -o output.csv fastq_file1.fastq fastq_file2.fastq
+    $ python assignment2.py -c --host localhost --port 25715 -n 4
 """
 
 # Metadata
 __author__ = "Mats Slik"
-__version__ = "0.1"
+__version__ = "1.0"
 
 import argparse
 from collections import defaultdict
 import multiprocessing as mp
 from multiprocessing.managers import BaseManager
-import numpy as np
 from pathlib import Path
+import numpy as np
+import os
 
 # Constants
 POISON_PILL = "TERMINATE"
 AUTHKEY = b"secretkey"
-
 
 # Utility functions
 def compute_phred_scores(line):
     """Convert FastQ quality scores to numerical PHRED scores."""
     return np.array([ord(char) - 33 for char in line.strip()])
 
-
 def parse_cli_args():
     """Parse command-line arguments to configure the script execution mode and parameters."""
     parser = argparse.ArgumentParser(
         description="Distributed PHRED score calculator for FastQ files."
     )
-    parser.add_argument("--host", required=True, help="Hostname for the server.")
-    parser.add_argument("--port", required=True, type=int, help="Port for server communication.")
+    parser.add_argument(
+        "--host", required=True, help="Hostname for the server.")
+    parser.add_argument(
+        "--port", required=True, type=int, help="Port for server communication."
+    )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("-s", "--server", action="store_true", help="Run in server mode.")
-    group.add_argument("-c", "--client", action="store_true", help="Run in client mode.")
-    parser.add_argument("--chunks", type=int, default=4, help="Number of chunks to split the input files.")
-    parser.add_argument("-o", "--output", type=Path, help="Output file path (default is STDOUT).")
-    parser.add_argument("-n", "--num_cores", type=int, default=mp.cpu_count(),
-                        help="Number of cores to use in client mode.")
-    parser.add_argument("fastq_files", nargs="*", type=Path, help="Paths to FastQ files to process.")
+    group.add_argument(
+        "-s", "--server", action="store_true", help="Run in server mode."
+    )
+    group.add_argument(
+        "-c", "--client", action="store_true", help="Run in client mode."
+    )
+    parser.add_argument(
+        "--chunks", type=int, default=4, help="Number of chunks to split the input files."
+    )
+    parser.add_argument(
+        "-o", "--output", type=Path, help="Output file path (default is STDOUT)."
+    )
+    parser.add_argument(
+        "-n", "--num_cores", type=int, default=mp.cpu_count(),
+                        help="Number of cores to use in client mode."
+    )
+    parser.add_argument(
+        "fastq_files", nargs="*", type=Path, help="Paths to FastQ files to process (required in server mode)."
+    )
     return parser.parse_args()
-
 
 # Processing classes
 class JobManager(BaseManager):
     """A custom manager to manage server/client communication."""
-    pass
-
 
 JobManager.register("get_job_queue")
 JobManager.register("get_result_queue")
-
 
 class PhredScoreCalculator:
     """Handles the computation of PHRED scores from chunks of FastQ data."""
@@ -86,7 +96,6 @@ class PhredScoreCalculator:
                 score_sums[idx].append(score)
         return {pos: np.mean(scores) for pos, scores in score_sums.items()}
 
-
 # Server and Client implementations
 class Server(mp.Process):
     """Server class for distributing jobs to clients."""
@@ -110,12 +119,14 @@ class Server(mp.Process):
         for file_path in self.files:
             calculator = PhredScoreCalculator([file_path], chunks=self.chunks)
             for chunk in calculator.split_into_chunks(file_path):
-                job_queue.put((calculator.calculate_scores, chunk))
+                job_queue.put((PhredScoreCalculator.calculate_scores, chunk))
 
         # Collect results
         results = []
-        while len(results) < len(self.files) * self.chunks:
-            results.append(result_queue.get())
+        expected_results = self.chunks * len(self.files)
+        while len(results) < expected_results:
+            result = result_queue.get()
+            results.append(result)
             print("Collected a result.")
 
         # Output results
@@ -127,9 +138,9 @@ class Server(mp.Process):
             for result in results:
                 print(result)
 
+        # Signal termination to clients
         job_queue.put(POISON_PILL)
         manager.shutdown()
-
 
 class Client(mp.Process):
     """Client class for processing jobs from the server."""
@@ -150,11 +161,11 @@ class Client(mp.Process):
         while True:
             job = job_queue.get()
             if job == POISON_PILL:
+                job_queue.put(POISON_PILL)
                 break
             func, data = job
             result = func(data)
             result_queue.put(result)
-
 
 # Main execution logic
 def main():
@@ -163,11 +174,11 @@ def main():
     if args.server:
         server = Server(args.host, args.port, args.fastq_files, args.output, args.chunks)
         server.start()
+        server.join()
     elif args.client:
         client = Client(args.host, args.port, args.num_cores)
         client.start()
         client.join()
-
 
 if __name__ == "__main__":
     main()
