@@ -34,7 +34,7 @@ Examples:
 
 Author: Mats Slik
 Version: 1.
-"""# METADATA
+"""  # METADATA
 __author__ = "Mats Slik"
 __version__ = "1.1"
 
@@ -45,9 +45,11 @@ import csv
 import os
 import numpy as np
 
+
 def compute_phred_scores(quality_str):
     """Convert a quality string into PHRED scores."""
     return np.array([ord(char) - 33 for char in quality_str])
+
 
 def process_chunk(quality_lines):
     """Process a chunk of quality lines to calculate cumulative PHRED scores."""
@@ -60,6 +62,7 @@ def process_chunk(quality_lines):
     combined_array = np.stack(phred_arrays)
     sum_scores = np.sum(combined_array, axis=0)
     return sum_scores, len(phred_arrays)
+
 
 def aggregate_results(results):
     """Aggregate results from all chunks, calculating average PHRED scores."""
@@ -75,6 +78,7 @@ def aggregate_results(results):
             total_sum += sum_scores
         total_count += count
     return total_sum / total_count if total_count > 0 else None
+
 
 def main():
     """Main function."""
@@ -127,6 +131,7 @@ def main():
                         # Print the results to the console
                         for index, score in enumerate(average_scores):
                             print(f"{index},{score}")
+
 
 if __name__ == "__main__":
     main()
