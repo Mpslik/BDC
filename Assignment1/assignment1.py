@@ -34,11 +34,9 @@ Examples:
 
 Author: Mats Slik
 Version: 1.
-"""
-# METADATA
+"""# METADATA
 __author__ = "Mats Slik"
-__version__ = "1.0"
-
+__version__ = "1.1"
 
 # Imports
 import argparse
@@ -47,11 +45,9 @@ import csv
 import os
 import numpy as np
 
-
 def compute_phred_scores(quality_str):
     """Convert a quality string into PHRED scores."""
     return np.array([ord(char) - 33 for char in quality_str])
-
 
 def process_chunk(quality_lines):
     """Process a chunk of quality lines to calculate cumulative PHRED scores."""
@@ -64,7 +60,6 @@ def process_chunk(quality_lines):
     combined_array = np.stack(phred_arrays)
     sum_scores = np.sum(combined_array, axis=0)
     return sum_scores, len(phred_arrays)
-
 
 def aggregate_results(results):
     """Aggregate results from all chunks, calculating average PHRED scores."""
@@ -81,7 +76,6 @@ def aggregate_results(results):
         total_count += count
     return total_sum / total_count if total_count > 0 else None
 
-
 def main():
     """Main function."""
     parser = argparse.ArgumentParser(
@@ -89,35 +83,50 @@ def main():
     )
     parser.add_argument("-n", required=True, type=int, help="Number of cores to use.")
     parser.add_argument(
-        "-o", action="store_true", help="Output results to individual CSV files"
+        "-o", nargs='?', const=True, help="Output results to a CSV file or specify the output file name"
     )
     parser.add_argument("fastq_files", nargs="+", help="FastQ files to process")
     args = parser.parse_args()
 
+    # Process each FastQ file
     with multiprocessing.Pool(args.n) as pool:
         for fastq_path in args.fastq_files:
+            if not os.path.exists(fastq_path):
+                print(f"Error: File {fastq_path} not found.")
+                continue
+
             with open(fastq_path, "r") as fastq_file:
                 quality_lines = [
                     line.strip() for i, line in enumerate(fastq_file) if i % 4 == 3
                 ]
+                # Split the quality lines into chunks and process them in parallel
                 results = pool.map(
-                    process_chunk, [quality_lines[i :: args.n] for i in range(args.n)]
+                    process_chunk, [quality_lines[i::args.n] for i in range(args.n)]
                 )
+                results = [result for result in results if result is not None]  # Filter None results
                 average_scores = aggregate_results(results)
 
                 if average_scores is not None:
+                    # Handle output based on -o argument
                     if args.o:
-                        output_file_name = (
-                            f"{os.path.splitext(fastq_path)[0]}.output.csv"
-                        )
+                        if isinstance(args.o, str):
+                            output_file_name = args.o
+                        else:
+                            output_file_name = f"{os.path.splitext(fastq_path)[0]}.output.csv"
+
+                        output_dir = os.path.dirname(output_file_name)
+                        if output_dir and not os.path.exists(output_dir):
+                            os.makedirs(output_dir)
+
+                        # Write the results to a CSV file
                         with open(output_file_name, "w", newline="") as csvfile:
                             writer = csv.writer(csvfile)
                             writer.writerows(enumerate(average_scores))
                         print(f"Output for {fastq_path} written to {output_file_name}")
                     else:
+                        # Print the results to the console
                         for index, score in enumerate(average_scores):
                             print(f"{index},{score}")
-
 
 if __name__ == "__main__":
     main()
