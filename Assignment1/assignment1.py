@@ -35,49 +35,102 @@ Examples:
 Author: Mats Slik
 Version: 1.
 """  # METADATA
-__author__ = "Mats Slik"
-__version__ = "1.1"
-
 # Imports
 import argparse
 import multiprocessing
 import csv
-import os
+import itertools
 import numpy as np
+from pathlib import Path
+from typing import Generator, List, Tuple
+
+__author__ = "Mats Slik"
+__version__ = "1.2"
 
 
 def compute_phred_scores(quality_str):
     """Convert a quality string into PHRED scores."""
-    return np.array([ord(char) - 33 for char in quality_str])
+    return np.array([ord(char) - 33 for char in quality_str], dtype=np.float64)
 
 
-def process_chunk(quality_lines):
-    """Process a chunk of quality lines to calculate cumulative PHRED scores."""
-    phred_arrays = [
-        compute_phred_scores(line.strip()) for line in quality_lines if line
-    ]
-    if not phred_arrays:
-        return None
+def quality_line_generator(start: int, stop: int, filepath: Path) -> Generator[str, None, None]:
+    """A generator for FastQ file's quality lines."""
+    with open(filepath, "rb") as fastq_file:
+        fastq_file.seek(start)
+        while fastq_file.tell() < stop:
+            line = fastq_file.readline()
+            if not line:
+                break
+            if line.startswith(b"@"):  # Assuming '@' is at the beginning of each read identifier
+                fastq_file.readline()  # Skip the sequence line
+                fastq_file.readline()  # Skip the '+' line
+                yield fastq_file.readline().strip().decode()  # Yield the quality line
 
-    combined_array = np.stack(phred_arrays)
-    sum_scores = np.sum(combined_array, axis=0)
-    return sum_scores, len(phred_arrays)
+
+def process_chunk(chunk_tuple: Tuple[Path, int, int]) -> Tuple[Path, np.ndarray, np.ndarray]:
+    """Process a chunk of a FastQ file to calculate cumulative PHRED scores."""
+    filepath, start, stop = chunk_tuple
+
+    count_iterator, parsing_iterator = itertools.tee(
+        quality_line_generator(start, stop, filepath)
+    )
+
+    amount_of_lines = 0
+    max_line_length = 0
+
+    for line in count_iterator:
+        amount_of_lines += 1
+        if len(line) > max_line_length:
+            max_line_length = len(line)
+
+    all_phred_scores = np.full((amount_of_lines, max_line_length), np.nan, dtype=np.float64)
+
+    for i, line in enumerate(parsing_iterator):
+        for j, char in enumerate(line):
+            all_phred_scores[i, j] = ord(char) - 33
+
+    chunk_phred_sum = np.nansum(all_phred_scores, axis=0)
+    chunk_phred_count = np.count_nonzero(~np.isnan(all_phred_scores), axis=0)
+
+    return filepath, chunk_phred_sum, chunk_phred_count
 
 
-def aggregate_results(results):
+def aggregate_results(results: List[Tuple[Path, np.ndarray, np.ndarray]], fastq_files: List[Path], output: bool):
     """Aggregate results from all chunks, calculating average PHRED scores."""
-    total_sum = None
-    total_count = 0
-    for result in results:
-        if result is None:
-            continue
-        sum_scores, count = result
-        if total_sum is None:
-            total_sum = sum_scores
+    for fastq_file in fastq_files:
+        all_sum_arrays = [result[1] for result in results if result[0] == fastq_file]
+        all_count_arrays = [result[2] for result in results if result[0] == fastq_file]
+
+        total_phred_sums = np.sum(all_sum_arrays, axis=0)
+        total_phred_counts = np.sum(all_count_arrays, axis=0)
+        average_phred_scores = total_phred_sums / total_phred_counts
+
+        if output:
+            output_file_name = f"{fastq_file.stem}.output.csv"
+            with open(output_file_name, "w", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerows(enumerate(average_phred_scores))
+            print(f"Output for {fastq_file} written to {output_file_name}")
         else:
-            total_sum += sum_scores
-        total_count += count
-    return total_sum / total_count if total_count > 0 else None
+            for index, score in enumerate(average_phred_scores):
+                print(f"{index},{score}")
+
+
+def get_chunks(file_paths: List[Path], number_of_chunks: int) -> List[Tuple[Path, int, int]]:
+    """Divide files into chunks for parallel processing."""
+    chunks = []
+    chunks_per_file = number_of_chunks // len(file_paths)
+    for file_path in file_paths:
+        file_size = file_path.stat().st_size
+        chunk_size = file_size // chunks_per_file
+        start = 0
+        stop = chunk_size
+        while stop < file_size:
+            chunks.append((file_path, start, stop))
+            start = stop
+            stop += chunk_size
+        chunks.append((file_path, start, file_size))
+    return chunks
 
 
 def main():
@@ -89,48 +142,24 @@ def main():
     parser.add_argument(
         "-o", nargs='?', const=True, help="Output results to a CSV file or specify the output file name"
     )
-    parser.add_argument("fastq_files", nargs="+", help="FastQ files to process")
+    parser.add_argument("fastq_files", nargs="+", type=Path, help="FastQ files to process")
     args = parser.parse_args()
 
-    # Process each FastQ file
+    # Validate the existence of each FastQ file
+    for fastq_path in args.fastq_files:
+        if not fastq_path.exists():
+            print(f"Error: File {fastq_path} not found.")
+            return
+
+    # Create chunks for multiprocessing
+    data_chunks = get_chunks(args.fastq_files, args.n)
+
+    # Use multiprocessing pool to process chunks
     with multiprocessing.Pool(args.n) as pool:
-        for fastq_path in args.fastq_files:
-            if not os.path.exists(fastq_path):
-                print(f"Error: File {fastq_path} not found.")
-                continue
+        results = pool.map(process_chunk, data_chunks)
 
-            with open(fastq_path, "r") as fastq_file:
-                quality_lines = [
-                    line.strip() for i, line in enumerate(fastq_file) if i % 4 == 3
-                ]
-                # Split the quality lines into chunks and process them in parallel
-                results = pool.map(
-                    process_chunk, [quality_lines[i::args.n] for i in range(args.n)]
-                )
-                results = [result for result in results if result is not None]  # Filter None results
-                average_scores = aggregate_results(results)
-
-                if average_scores is not None:
-                    # Handle output based on -o argument
-                    if args.o:
-                        if isinstance(args.o, str):
-                            output_file_name = args.o
-                        else:
-                            output_file_name = f"{os.path.splitext(fastq_path)[0]}.output.csv"
-
-                        output_dir = os.path.dirname(output_file_name)
-                        if output_dir and not os.path.exists(output_dir):
-                            os.makedirs(output_dir)
-
-                        # Write the results to a CSV file
-                        with open(output_file_name, "w", newline="") as csvfile:
-                            writer = csv.writer(csvfile)
-                            writer.writerows(enumerate(average_scores))
-                        print(f"Output for {fastq_path} written to {output_file_name}")
-                    else:
-                        # Print the results to the console
-                        for index, score in enumerate(average_scores):
-                            print(f"{index},{score}")
+    # Aggregate and output results
+    aggregate_results(results, args.fastq_files, output=args.o)
 
 
 if __name__ == "__main__":
