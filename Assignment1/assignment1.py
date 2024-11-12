@@ -45,7 +45,7 @@ from pathlib import Path
 from typing import Generator, List, Tuple
 
 __author__ = "Mats Slik"
-__version__ = "1.2"
+__version__ = "2.1"
 
 
 def compute_phred_scores(quality_str):
