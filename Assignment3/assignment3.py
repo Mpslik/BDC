@@ -55,7 +55,19 @@ def aggregate_results(results: List[Tuple[np.ndarray, np.ndarray]]):
 
 
 def main():
-    pass
+    parser = argparse.ArgumentParser(description="GNU Parallel PHRED score calculator for FastQ files.")
+    parser.add_argument("fastq_file", type=Path, help="Path to the FastQ file to process.")
+    parser.add_argument("-n", type=int, required=True, help="Number of chunks to split the file into.")
+    args = parser.parse_args()
+
+    # Create chunks for parallel processing
+    data_chunks = get_chunks(args.fastq_file, args.n)
+
+    # Process each chunk individually
+    results = [process_chunk(chunk) for chunk in data_chunks]
+
+    # Aggregate and output results to stdout
+    aggregate_results(results)
 
 
 if __name__ == "__main__":
