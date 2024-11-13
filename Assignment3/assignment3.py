@@ -48,3 +48,15 @@ def process_chunk(chunk_tuple: Tuple[Path, int, int]) -> Tuple[np.ndarray, np.nd
                 break
     scores = np.array(all_phred_scores)
     return np.nansum(scores, axis=0), np.count_nonzero(~np.isnan(scores), axis=0)
+
+
+def aggregate_results(results: List[Tuple[np.ndarray, np.ndarray]]):
+    pass
+
+
+def main():
+    pass
+
+
+if __name__ == "__main__":
+    main()
