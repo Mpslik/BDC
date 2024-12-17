@@ -151,27 +151,38 @@ class Server(mp.Process):
         result_queue = manager.get_result_queue()
 
         # Enqueue jobs
-        for file_path in self.files:
-            calculator = PhredScoreCalculator([file_path], chunks=self.chunks)
-            for chunk in calculator.split_into_chunks(file_path):
+        total_jobs = 0
+        for file_handle in self.files:
+            calculator = PhredScoreCalculator([file_handle], chunks=self.chunks)
+            for chunk in calculator.split_into_chunks(file_handle):
                 job_queue.put((PhredScoreCalculator.calculate_scores, chunk))
+                total_jobs += 1
 
         # Collect results
         results = []
-        expected_results = self.chunks * len(self.files)
-        while len(results) < expected_results:
+        while len(results) < total_jobs:
             result = result_queue.get()
             results.append(result)
-            print("Collected a result.")
+            print("Collected a result.", file=sys.stderr)
 
-        # Output results
-        if self.output:
-            with open(self.output, "w", encoding="utf-8") as file:
-                for result in results:
-                    file.write(f"{result}\n")
+        # Aggregate all results
+        # Each result is {pos: [sum, count]}
+        final_scores = defaultdict(lambda: [0, 0])
+        for res in results:
+            for pos, (s, c) in res.items():
+                final_scores[pos][0] += s
+                final_scores[pos][1] += c
+
+        final_means = {pos: final_scores[pos][0] / final_scores[pos][1] for pos in final_scores}
+
+        # Output results in CSV format
+        if self.output_file:
+            writer = csv.writer(self.output_file)
         else:
-            for result in results:
-                print(result)
+            writer = csv.writer(sys.stdout)
+        writer.writerow(["line_number", "average_phredscore"])
+        for pos in sorted(final_means.keys()):
+            writer.writerow([pos, final_means[pos]])
 
         # Signal termination to clients
         job_queue.put(POISON_PILL)
