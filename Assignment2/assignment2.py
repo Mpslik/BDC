@@ -114,15 +114,21 @@ class PhredScoreCalculator:
 
     @staticmethod
     def calculate_scores(chunk):
-        """Calculate average PHRED scores from a list of FastQ quality lines."""
-        score_sums = defaultdict(list)
+        """
+        Calculate PHRED score sums and counts for each position from a list of FastQ quality lines.
+        We store sums and counts so final averages can be computed after aggregating all chunks.
+        """
+        score_data = defaultdict(lambda: [0, 0])  # pos -> [sum, count]
+
         for line in chunk:
-            if line.startswith("+"):
-                continue  # Skip header lines
+            if line.startswith("+") or line.startswith("@"):
+                continue
+            # Check if line is not a sequence line (A,T,C,G,N)
             scores = compute_phred_scores(line)
             for idx, score in enumerate(scores):
-                score_sums[idx].append(score)
-        return {pos: np.mean(scores) for pos, scores in score_sums.items()}
+                score_data[idx][0] += score
+                score_data[idx][1] += 1
+        return dict(score_data)
 
 
 # Server and Client implementations
