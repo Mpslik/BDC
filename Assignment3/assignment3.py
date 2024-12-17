@@ -45,6 +45,7 @@ def compute_phred_scores(quality_str):
     """
     return np.array([ord(char) - 33 for char in quality_str], dtype=np.float64)
 
+
 def read_fastq_quality_lines():
     """
     Reads FASTQ data from stdin and yields only the quality lines.
@@ -52,9 +53,10 @@ def read_fastq_quality_lines():
     lines = sys.stdin.read().strip().split('\n')
     # Process lines in sets of four
     for i in range(0, len(lines), 4):
-        if i+3 < len(lines):
-            quality_line = lines[i+3].strip()
+        if i + 3 < len(lines):
+            quality_line = lines[i + 3].strip()
             yield quality_line
+
 
 def aggregate_results_from_stdin():
     """
@@ -68,14 +70,14 @@ def aggregate_results_from_stdin():
     for line in sys.stdin:
         line = line.strip()
         if line.startswith("sum:"):
-            arr_str = line[line.index('[')+1:line.rindex(']')]
+            arr_str = line[line.index('[') + 1:line.rindex(']')]
             if arr_str.strip():
                 sums = np.fromstring(arr_str, sep=",")
                 sum_arrays.append(sums)
             else:
                 sum_arrays.append(np.array([]))
         elif line.startswith("count:"):
-            arr_str = line[line.index('[')+1:line.rindex(']')]
+            arr_str = line[line.index('[') + 1:line.rindex(']')]
             if arr_str.strip():
                 counts = np.fromstring(arr_str, sep=",")
                 count_arrays.append(counts)
@@ -151,6 +153,7 @@ def main():
         chunk_parser_mode()
     elif args.combine_chunks:
         aggregate_results_from_stdin()
+
 
 if __name__ == "__main__":
     main()
