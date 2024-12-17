@@ -11,13 +11,30 @@ This script has two modes:
 __author__ = "Mats Slik"
 __version__ = "1.0"
 
-
 import argparse
 import sys
 import numpy as np
 import csv
 from pathlib import Path
 from typing import List, Tuple
+
+
+def argument_parser():
+    parser = argparse.ArgumentParser(
+        description="GNU Parallel PHRED score calculator for FastQ files."
+    )
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "--chunk-parser",
+        action="store_true",
+        help="Parse a chunk of FASTQ data from stdin and output sum and count per position."
+    )
+    mode.add_argument(
+        "--combine-chunks",
+        action="store_true",
+        help="Combine results from chunk parses (sum and count arrays) into final CSV output."
+    )
+    return parser.parse_args()
 
 
 def compute_phred_scores(quality_str):
