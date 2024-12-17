@@ -4,6 +4,11 @@
 Calculate average PHRED scores per base position from FastQ files using GNU Parallel
 """
 
+# Metadata
+__author__ = "Mats Slik"
+__version__ = "1.0"
+
+
 import argparse
 import sys
 import numpy as np
