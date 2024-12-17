@@ -219,12 +219,19 @@ class Client(mp.Process):
 def main():
     """Main function."""
     args = parse_cli_args()
-    if args.server:
-        server = Server(args.host, args.port, args.fastq_files, args.output, args.chunks)
+    if args.s:
+        # Server mode
+        if args.csvfile:
+            output_file = args.csvfile
+        else:
+            output_file = None
+        server = Server(args.host, args.port, args.fastq_files, output_file, args.chunks)
         server.start()
         server.join()
-    elif args.client:
-        client = Client(args.host, args.port, args.num_cores)
+    elif args.c:
+        # Client mode
+        num_cores = args.n if args.n else mp.cpu_count()
+        client = Client(args.host, args.port, num_cores)
         client.start()
         client.join()
 
