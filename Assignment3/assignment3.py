@@ -45,6 +45,22 @@ def compute_phred_scores(quality_str):
     """
     return np.array([ord(char) - 33 for char in quality_str], dtype=np.float64)
 
+def read_fastq_quality_lines():
+    """
+    Reads FASTQ data from stdin and yields only the quality lines.
+    A FASTQ record consists of 4 lines:
+      1: @read_header
+      2: sequence
+      3: +
+      4: quality line
+    Since we rely on GNU Parallel to provide complete reads, we can read lines in groups of four.
+    """
+    lines = sys.stdin.read().strip().split('\n')
+    # Process lines in sets of four
+    for i in range(0, len(lines), 4):
+        if i+3 < len(lines):
+            quality_line = lines[i+3].strip()
+            yield quality_line
 
 def get_chunks(file_paths: List[Path], number_of_chunks: int) -> List[Tuple[Path, int, int]]:
     """
