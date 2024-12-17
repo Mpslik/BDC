@@ -16,11 +16,12 @@ import argparse
 from collections import defaultdict
 import multiprocessing as mp
 from multiprocessing.managers import BaseManager
-from pathlib import Path
 import numpy as np
 import os
 import queue
+import sys
 import time
+import csv
 
 # Constants
 AUTHKEY = b"secretkey"
@@ -35,35 +36,55 @@ def compute_phred_scores(line):
 
 def parse_cli_args():
     """Parse command-line arguments to configure the script execution mode and parameters."""
-    parser = argparse.ArgumentParser(
+    argparser = argparse.ArgumentParser(
         description="Distributed PHRED score calculator for FastQ files."
     )
-    parser.add_argument(
-        "--host", required=True, help="Hostname for the server.")
-    parser.add_argument(
-        "--port", required=True, type=int, help="Port for server communication."
+    mode = argparser.add_mutually_exclusive_group(required=True)
+    mode.add_argument(
+        "-s",
+        action="store_true",
+        help="Run the program in Server mode; see extra options needed below",
     )
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "-s", "--server", action="store_true", help="Run in server mode."
+    mode.add_argument(
+        "-c",
+        action="store_true",
+        help="Run the program in Client mode; see extra options needed below",
     )
-    group.add_argument(
-        "-c", "--client", action="store_true", help="Run in client mode."
+    server_args = argparser.add_argument_group(title="Arguments when run in server mode")
+    server_args.add_argument(
+        "-o",
+        action="store",
+        dest="csvfile",
+        type=argparse.FileType('w', encoding='UTF-8'),
+        required=False,
+        help="CSV file to save the output to. Default is output to terminal STDOUT",
     )
-    parser.add_argument(
-        "--chunks", type=int, default=4, help="Number of chunks to split the input files."
+    server_args.add_argument(
+        "fastq_files",
+        action="store",
+        type=argparse.FileType('r'),
+        nargs="*",
+        help="At least 1 Illumina Fastq Format file to process",
     )
-    parser.add_argument(
-        "-o", "--output", type=Path, help="Output file path (default is STDOUT)."
+    server_args.add_argument("--chunks", action="store", type=int, required=False, default=4)
+
+    client_args = argparser.add_argument_group(title="Arguments when run in client mode")
+    client_args.add_argument(
+        "-n",
+        action="store",
+        dest="n",
+        required=False,
+        type=int,
+        help="Number of cores to use per host.",
     )
-    parser.add_argument(
-        "-n", "--num_cores", type=int, default=mp.cpu_count(),
-        help="Number of cores to use in client mode."
+    argparser.add_argument(
+        "--host", action="store", type=str, help="The hostname where the Server is listening"
     )
-    parser.add_argument(
-        "fastq_files", nargs="*", type=Path, help="Paths to FastQ files to process (required in server mode)."
+    argparser.add_argument(
+        "--port", action="store", type=int, help="The port on which the Server is listening"
     )
-    return parser.parse_args()
+
+    return argparser.parse_args()
 
 
 # Processing classes
