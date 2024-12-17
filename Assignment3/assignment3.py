@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
 """
-Calculate average PHRED scores per base position from FastQ files using GNU Parallel
+Calculate average PHRED scores per base position from FastQ files using GNU Parallel.
+This script has two modes:
+1. --chunk-parser: Reads a chunk of FASTQ data from stdin, computes PHRED sums and counts.
+2. --combine-chunks: Reads sums and counts from stdin and combines them into final averages.
 """
 
 # Metadata
