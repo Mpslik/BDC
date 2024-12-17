@@ -2,7 +2,7 @@
 
 # Define the FastQ file to process
 
-FASTQ_FILE=""
+FASTQ_FILE="/commons/Themas/Thema12/HPC/rnaseq.fastq"
 
 NUM_JOBS=4  # Number of parallel jobs
 BLOCK_SIZE=1M  # Block size
