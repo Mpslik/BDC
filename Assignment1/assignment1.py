@@ -97,6 +97,8 @@ def process_chunk(chunk_tuple: Tuple[Path, int, int]) -> Tuple[Path, np.ndarray,
 
 def aggregate_results(results: List[Tuple[Path, np.ndarray, np.ndarray]], fastq_files: List[Path], output: bool):
     """Aggregate results from all chunks, calculating average PHRED scores."""
+    multiple_files = len(fastq_files) > 1
+
     for fastq_file in fastq_files:
         all_sum_arrays = [result[1] for result in results if result[0] == fastq_file]
         all_count_arrays = [result[2] for result in results if result[0] == fastq_file]
@@ -106,7 +108,11 @@ def aggregate_results(results: List[Tuple[Path, np.ndarray, np.ndarray]], fastq_
         average_phred_scores = total_phred_sums / total_phred_counts
 
         if output:
-            output_file_name = f"{fastq_file.stem}.output.csv"
+            if multiple_files:
+                output_file_name = f"{fastq_file.stem}.output.csv"
+            else:
+                output_file_name = "output.csv"
+
             with open(output_file_name, "w", newline="") as csvfile:
                 writer = csv.writer(csvfile)
                 writer.writerows(enumerate(average_phred_scores))
