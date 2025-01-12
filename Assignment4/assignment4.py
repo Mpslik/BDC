@@ -66,91 +66,75 @@ def parse_args():
 
 class PhredscoreCalculator:
     """
-    A class responsible for reading FastQ file chunks, extracting PHRED scores,
-    and computing average PHRED values.
+    A class responsible for reading FastQ file slices (chunked by bytes),
+    extracting PHRED scores, and computing partial sums.
 
-    Attributes: n_chunks (int): The total number of chunks to split files into.
+    Attributes:
+        n_chunks (int): Number of chunks to split each file into (naive byte-based).
     """
 
     def __init__(self, n_chunks):
-        """
-        Initialize the calculator with the desired number of chunks.
-
-        Args: n_chunks (int): The number of chunks to split files into.
-        """
         self.n_chunks = n_chunks
 
     @staticmethod
-    def calculate_phred_scores(quality_str):
+    def compute_phred_scores(quality_str):
         """
         Convert a single quality string into PHRED scores.
-
-        Args: quality_str (str): A line representing quality scores in ASCII-encoded form.
-
-        Returns: list: A list of PHRED scores (integers).
         """
-        pass
+        return np.array([ord(ch) - 33 for ch in quality_str.strip()], dtype=np.float64)
 
     @staticmethod
-    def read_binary_chunk(filename: Path, start: int, end: int) -> bytes:
+    def read_chunk_bytes(filepath: Path, start: int, end: int) -> bytes:
         """
-        Read a slice of the file as binary data between start and end (byte positions).
-
-        Args:
-            filename (Path): Path to the FASTQ file.
-            start (int): Start byte position.
-            end (int): End byte position.
-
-        Returns:
-            bytes: The binary data read from the file slice.
+        Read raw bytes from 'start' to 'end' in the file.
         """
-        with open(filename, mode="rb") as binary_file:
-            binary_file.seek(start)
-            return binary_file.read(end - start)
+        with open(filepath, "rb") as f:
+            f.seek(start)
+            return f.read(end - start)
 
-    def binary_to_phredscores(self, chunk):
+    def chunk_file(self, file_path: Path):
         """
-        Convert quality lines in the chunk to PHRED scores.
+        Split 'file_path' into self.n_chunks by naive byte-splitting,
+        just like in Assignment 1.
 
-        Args:
-            chunk (bytes): The binary chunk of a FASTQ file.
+        Yields (file_path, start, end).
+        """
+        fsize = file_path.stat().st_size
+        chunk_size = fsize // self.n_chunks
+        remainder = fsize % self.n_chunks
 
-        Returns:
-            dict: Mapping from base_position to a list of PHRED scores.
-        """
-        pass
-
-    def calculate_average_phredscores(all_phredscores: dict):
-        """
-        Calculate average PHRED
-        """
-        pass
+        offset = 0
+        for i in range(self.n_chunks):
+            this_size = chunk_size + (1 if i < remainder else 0)
+            start = offset
+            end = offset + this_size
+            yield file_path, start, end
+            offset = end
 
     def process_chunk(self, file_chunk_info):
         """
-        Process a single chunk of a file:
-            - Read the chunk
-            - Convert to PHRED scores
-            - Compute average per position
-        Args:
-            file_chunk_info (tuple): A tuple containing (file_path, start, end).
-        Returns:
-            tuple: (file_path, dict_of_averages) where dict_of_averages maps position->average_score
+        Given (file_path, start, end), read those bytes, split them into lines,
+        and treat every 4th line as a quality line.
+        Return partial sums as a dict: pos->[sum, count].
         """
-        pass
+        file_path, start, end = file_chunk_info
+        raw_data = self.read_chunk_bytes(file_path, start, end)
 
-    def determine_chunks(self, file_path):
-        """
-        Split a file into n_chunks parts by byte size. The last chunk goes until the file end.
+        lines = raw_data.split(b"\n")
+        partial_sums = defaultdict(lambda: [0.0, 0.0])
 
-        Args:
-            file_path (Path): The path to the FASTQ file.
+        i = 0
+        # We assume the 4th line in each block is a quality line
+        while i < len(lines) - 3:
+            # lines[i+3] is the quality line
+            quality_line = lines[i + 3].decode("utf-8", errors="ignore")
+            scores = self.compute_phred_scores(quality_line)
+            for idx, val in enumerate(scores):
+                partial_sums[idx][0] += val
+                partial_sums[idx][1] += 1
+            i += 4
 
-        Yields:
-            tuple: (file_path, start, end) for each chunk.
-        """
-        pass
-
+        return partial_sums
 
 def output_format_selector(phredscores, output_prefix, nfiles, run_index, workers):
     """
