@@ -169,16 +169,95 @@ def main():
     """
     Main function:
     - Parse arguments
-    - Initialize MPI environment
-    - Controller (rank 0) splits files into chunks and scatters them
-    - Workers process their assigned chunks
-    - Controller gathers results, aggregates them, and outputs the final results
+    - MPI environment: rank0 = controller, rank>0 = workers
+    - rank0 splits each file into 'chunks'
+    - workers do partial sums, rank0 merges results => final averages
     """
-
     args = parse_args()
     comm = MPI.COMM_WORLD
     size = comm.Get_size()
     rank = comm.Get_rank()
+
+    start_time = MPI.Wtime()
+
+    calculator = PhredscoreCalculator(n_chunks=args.chunks)
+
+    if rank == 0:
+        # Controller
+
+        tasks = []
+        file_names = []
+        for fpath in args.files:
+            path = Path(fpath)
+            for chunk_info in calculator.chunk_file(path):
+                tasks.append(chunk_info)
+                file_names.append(str(path))
+
+        num_workers = size - 1
+        if num_workers < 1:
+            print("Error: Need at least 2 ranks (1 controller + 1 worker).")
+            sys.exit(1)
+
+        #  Distribute tasks to workers
+        dist_data = [[] for _ in range(num_workers)]
+        for i, t in enumerate(tasks):
+            w_index = i % num_workers
+            dist_data[w_index].append((t, file_names[i]))
+
+        for w in range(1, size):
+            comm.send(dist_data[w - 1], dest=w, tag=77)
+
+        # Receive partial results
+        combined = {}
+
+        for _ in range(num_workers):
+            worker_partials = comm.recv(source=MPI.ANY_SOURCE, tag=88)
+            # Merge
+            for fname, partial_dict in worker_partials.items():
+                if fname not in combined:
+                    combined[fname] = defaultdict(lambda: [0.0, 0.0])
+                for pos, (s, c) in partial_dict.items():
+                    combined[fname][pos][0] += s
+                    combined[fname][pos][1] += c
+
+        # Compute final averages
+        final_averages = {}
+        for fname, sc_map in combined.items():
+            final_averages[fname] = {}
+            for pos, (s, c) in sc_map.items():
+                if c == 0:
+                    final_averages[fname][pos] = 0.0
+                else:
+                    final_averages[fname][pos] = s / c
+
+        # Output
+        output_phred_results(
+            final_averages,
+            args.output_prefix,
+            run_index=args.run_index,
+            workers=args.workers
+        )
+
+        end_time = MPI.Wtime()
+        elapsed = end_time - start_time
+        print(f"# [Rank0] Finished in {elapsed:.4f} seconds", file=sys.stderr)
+
+    else:
+        # Worker
+        my_tasks = comm.recv(source=0, tag=77)
+
+        # Process partial sums
+        partial_results = {}
+        for (chunkinfo, fname) in my_tasks:
+            sums_map = calculator.process_chunk(chunkinfo)
+            if fname not in partial_results:
+                partial_results[fname] = defaultdict(lambda: [0.0, 0.0])
+            for pos, (s, c) in sums_map.items():
+                partial_results[fname][pos][0] += s
+                partial_results[fname][pos][1] += c
+
+        # Send results
+        comm.send(partial_results, dest=0, tag=88)
 
 
 if __name__ == "__main__":
