@@ -2,6 +2,9 @@
 #SBATCH --job-name=BDC_Assignment4
 #SBATCH --output=assignment4_%j.out
 #SBATCH --error=assignment4_%j.err
+#SBATCH --nodes=1
+#SBATCH --partition=assemblix
+#SBATCH --nodelist=assemblix2019
 #SBATCH --ntasks=5
 #SBATCH --time=00:10:00
 #SBATCH --mem=4G
@@ -18,6 +21,6 @@
 
 mpirun -n 5 python3 assignment4.py \
     -n 4 \
-    --files /commons/docent/Thema12/HPC/rnaseq.fastq
+    --files /commons/Themas/Thema12/HPC/rnaseq.fastq
 
 echo "Done with assignment4 job!"
