@@ -1,15 +1,15 @@
 #!/bin/bash
-SBATCH --job-name=BDC_Assignment4
-SBATCH --output=assignment4_%j.out
-SBATCH --error=assignment4_%j.err
-SBATCH --ntasks=5
-SBATCH --time=00:10:00
-SBATCH --mem=4G
-SBATCH --partition=short
+#SBATCH --job-name=BDC_Assignment4
+#SBATCH --output=assignment4_%j.out
+#SBATCH --error=assignment4_%j.err
+#SBATCH --ntasks=5
+#SBATCH --time=00:10:00
+#SBATCH --mem=4G
+#SBATCH --partition=short
 
 
-module load python/3.11
-module load mpi4py
+#module load python/3.11
+#module load mpi4py
 
 # Example arguments to assignment4.py:
 # -n 4 : 4 chunks per file (like assignment1).
@@ -18,7 +18,6 @@ module load mpi4py
 
 mpirun -n 5 python3 assignment4.py \
     -n 4 \
-    --files /commons/docent/Thema12/HPC/rnaseq.fastq /commons/docent/Thema12/HPC/rnaseq_selection.fastq \
-    --output
+    --files /commons/docent/Thema12/HPC/rnaseq.fastq
 
 echo "Done with assignment4 job!"
