@@ -125,9 +125,11 @@ def aggregate_results(results: List[Tuple[Path, np.ndarray, np.ndarray]], fastq_
 def find_read_boundaries(filepath: Path) -> List[int]:
     """
     Read the file in 4-line FASTQ chunks and record the byte offset where each read begins.
-    Return a list of offsets (start of each read).
+    Return a list of offsets (start of each read), plus the final file offset for convenience.
     """
     offsets = []
+    final_offset = 0
+
     with open(filepath, "rb") as f:
         while True:
             start_offset = f.tell()
@@ -138,17 +140,22 @@ def find_read_boundaries(filepath: Path) -> List[int]:
             if not line.startswith(b"@"):
                 # Not a valid FASTQ read start, skip
                 continue
+
             # Found a valid read start => store it
             offsets.append(start_offset)
 
-            # Skip next 3 lines: seq, plus, quality
+            # Skip the next 3 lines: seq, plus, quality
             seq_line = f.readline()
             plus_line = f.readline()
             qual_line = f.readline()
             if not (seq_line and plus_line and qual_line):
+
                 break
 
-    offsets.append(f.tell())
+        final_offset = f.tell()
+
+    offsets.append(final_offset)
+
     return offsets
 
 
