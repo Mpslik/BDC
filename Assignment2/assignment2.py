@@ -10,7 +10,7 @@ Examples:
 
 # Metadata
 __author__ = "Mats Slik"
-__version__ = "1.0"
+__version__ = "2.0"
 
 import argparse
 from collections import defaultdict
@@ -27,11 +27,39 @@ import csv
 AUTHKEY = b"secretkey"
 POISON_PILL = "TERMINATE"
 
+g_job_queue = mp.Queue()
+g_result_queue = mp.Queue()
+
 
 # Utility functions
 def compute_phred_scores(line):
     """Convert FastQ quality scores to numerical PHRED scores."""
     return np.array([ord(char) - 33 for char in line.strip()])
+
+
+def read_all_quality_lines(fastq_path: str) -> list[str]:
+    """
+    Read all quality lines from the FastQ file, ensuring 4-line blocks:
+      1) @read_header
+      2) DNA sequence
+      3) plus line
+      4) quality line
+    Return a list of *just* the quality lines (no partial reads).
+    """
+    quality_lines = []
+    with open(fastq_path, "r", encoding="utf-8") as f:
+        while True:
+            header = f.readline()
+            if not header:
+                break
+            seq_line = f.readline()
+            plus_line = f.readline()
+            qual_line = f.readline()
+            if not qual_line:
+                break
+            # Only the quality line
+            quality_lines.append(qual_line.rstrip("\n"))
+    return quality_lines
 
 
 def parse_cli_args():
@@ -90,10 +118,11 @@ def parse_cli_args():
 # Processing classes
 class JobManager(BaseManager):
     """A custom manager to manage server/client communication."""
+    pass
 
 
-JobManager.register("get_job_queue")
-JobManager.register("get_result_queue")
+JobManager.register("get_job_queue", callable=lambda: g_job_queue)
+JobManager.register("get_result_queue", callable=lambda: g_result_queue)
 
 
 class PhredScoreCalculator:
@@ -104,13 +133,26 @@ class PhredScoreCalculator:
         self.output_path = output_path
         self.chunks = chunks
 
-    def split_into_chunks(self, file_path):
-        """Yield chunks of lines from a FastQ file."""
-        with open(file_path, "r", encoding="utf-8") as file:
-            lines = file.readlines()
-            chunk_size = len(lines) // self.chunks + (len(lines) % self.chunks > 0)
-            for i in range(0, len(lines), chunk_size):
-                yield lines[i:i + chunk_size]
+    def split_into_chunks(self, file_handle):
+        """
+        read-boundary chunking.
+        """
+        file_path = file_handle.name
+        quality_lines = read_all_quality_lines(file_path)
+
+        n_lines = len(quality_lines)
+        chunk_size = n_lines // self.chunks
+        remainder = n_lines % self.chunks
+
+        start_idx = 0
+        for i in range(self.chunks):
+
+            size = chunk_size + (1 if i < remainder else 0)
+            if size == 0:
+                break
+            end_idx = start_idx + size
+            yield quality_lines[start_idx:end_idx]
+            start_idx = end_idx
 
     @staticmethod
     def calculate_scores(chunk):
