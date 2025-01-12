@@ -41,19 +41,19 @@ def parse_args():
         "--chunks",
         type=int,
         default=4,
-        help="Number of chunks per file (naive byte-splitting)."
+        help="Number of chunks per file ."
     )
     parser.add_argument(
         "--run-index",
         type=int,
         default=1,
-        help="Which run index (for performance/replication experiments)."
+        help="Which run index ."
     )
     parser.add_argument(
         "--workers",
         type=int,
         default=0,
-        help="Reported worker count (if doing numeric stability tests)."
+        help="Reported worker count."
     )
     parser.add_argument(
         "--output-prefix",
