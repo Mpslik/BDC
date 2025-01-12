@@ -121,10 +121,11 @@ def aggregate_results(results: List[Tuple[Path, np.ndarray, np.ndarray]], fastq_
             for index, score in enumerate(average_phred_scores):
                 print(f"{index},{score}")
 
+
 def find_read_boundaries(filepath: Path) -> List[int]:
     """
     Read the file in 4-line FASTQ chunks and record the byte offset where each read begins.
-    Return a list of offsets (start of each read), plus the final file offset for convenience.
+    Return a list of offsets (start of each read).
     """
     offsets = []
     with open(filepath, "rb") as f:
@@ -145,12 +146,42 @@ def find_read_boundaries(filepath: Path) -> List[int]:
             plus_line = f.readline()
             qual_line = f.readline()
             if not (seq_line and plus_line and qual_line):
-                # If we don't have full 4 lines, we've hit EOF or invalid record
                 break
 
-    # Also append final offset (i.e., EOF)
     offsets.append(f.tell())
     return offsets
+
+
+def make_chunks_for_file(file_path: Path, num_chunks: int) -> List[Tuple[Path, int, int]]:
+    """
+    Given a file and a desired number of chunks, partition the file's read boundaries
+    into (start_offset, stop_offset) pairs so we never split a read. Returns a list of
+    (file_path, start_offset, stop_offset).
+    """
+    boundaries = find_read_boundaries(file_path)
+    if len(boundaries) < 2:
+        # No reads return one empty chunk
+        return [(file_path, 0, 0)]
+
+    total_reads = len(boundaries) - 1
+    chunk_size = max(1, total_reads // num_chunks)
+
+    chunks = []
+    start_idx = 0
+    for i in range(num_chunks - 1):
+        end_idx = start_idx + chunk_size
+        if end_idx >= total_reads:
+            end_idx = total_reads
+        start_offset = boundaries[start_idx]
+        stop_offset = boundaries[end_idx]
+        chunks.append((file_path, start_offset, stop_offset))
+        start_idx = end_idx
+
+    # Last chunk => from start_idx to the end
+    if start_idx < total_reads:
+        chunks.append((file_path, boundaries[start_idx], boundaries[-1]))
+
+    return chunks
 
 
 def get_chunks(file_paths: List[Path], n_cores: int) -> List[Tuple[Path, int, int]]:
