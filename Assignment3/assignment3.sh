@@ -5,7 +5,7 @@
 # and then in combine-chunks mode to aggregate results.
 
 # Input FASTQ file
-FASTQ_FILE="/commons/Themas/Thema12/HPC/rnaseq.fastq"
+FASTQ_FILE="/commons/docent/Thema12/HPC/rnaseq.fastq"
 NUM_JOBS=4
 BLOCK_SIZE=1M
 
@@ -19,7 +19,10 @@ BLOCK_SIZE=1M
 # then pipe all results to the same python script in --combine-chunks mode
 # to produce a final CSV.
 
-parallel --jobs $NUM_JOBS --pipepart --block $BLOCK_SIZE \
+parallel --jobs $NUM_JOBS \
+    --pipepart \
+    --block $BLOCK_SIZE \
     --recstart '@' \
     python3 assignment3.py --chunk-parser :::: $FASTQ_FILE \
-    | python3 assignment3.py --combine-chunks > output.csv
+    | python3 assignment3.py --combine-chunks \
+    > output.csv
