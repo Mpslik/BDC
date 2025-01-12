@@ -38,7 +38,7 @@ def parse_args():
         help="List of FastQ files to process."
     )
     parser.add_argument(
-        "--chunks",
+        "-n",
         type=int,
         default=4,
         help="Number of chunks per file ."
