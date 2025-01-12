@@ -89,17 +89,15 @@ class PhredscoreCalculator:
         return np.array([ord(ch) - 33 for ch in quality_str.strip()], dtype=np.float64)
 
     @staticmethod
-    def read_chunk_bytes(filepath: Path, start: int, end: int) -> bytes:
+    def read_chunk_bytes(filepath: Path, start: int, end: int) -> tuple[int, int]:
         """
-        Read raw bytes from 'start' to 'end' in the file.
+        Return (start, end) open the file in streaming.
         """
-        with open(filepath, "rb") as f:
-            f.seek(start)
-            return f.read(end - start)
+        return start, end
 
     def chunk_file(self, file_path: Path):
         """
-        Split 'file_path' into self.n_chunks by naive byte-splitting.
+        Split 'file_path' into self.n_chunks.
 
         Yields (file_path, start, end).
         """
@@ -117,26 +115,52 @@ class PhredscoreCalculator:
 
     def process_chunk(self, file_chunk_info):
         """
-        Given (file_path, start, end), read those bytes, split them into lines,
-        and treat every 4th line as a quality line.
-        Return partial sums as a dict: pos->[sum, count].
+        Given (file_path, start, end), parse lines from 'start'..'end' in streaming
+
+        Return partial sums: {pos: [sum, count]}.
         """
-        file_path, start, end = file_chunk_info
-        raw_data = self.read_chunk_bytes(file_path, start, end)
+        file_path, chunk_start, chunk_end = file_chunk_info
+        partial_sums = defaultdict(zero_pair)
 
-        lines = raw_data.split(b"\n")
-        partial_sums = defaultdict(lambda: [0.0, 0.0])
+        with open(file_path, "rb") as f:
+            f.seek(chunk_start)
+            read_bytes = 0
 
-        i = 0
-        # the 4th line in each block is a quality line
-        while i < len(lines) - 3:
-            # lines[i+3] is the quality line
-            quality_line = lines[i + 3].decode("utf-8", errors="ignore")
-            scores = self.compute_phred_scores(quality_line)
-            for idx, val in enumerate(scores):
-                partial_sums[idx][0] += val
-                partial_sums[idx][1] += 1
-            i += 4
+            while f.tell() < chunk_end:
+                # @hdr line
+                hdr_line = f.readline()
+                if not hdr_line:
+                    break
+                read_bytes += len(hdr_line)
+
+                # seq line
+                seq_line = f.readline()
+                if not seq_line:
+                    break
+                read_bytes += len(seq_line)
+
+                # 3) read + line
+                plus_line = f.readline()
+                if not plus_line:
+                    break
+                read_bytes += len(plus_line)
+
+                # quality line
+                qual_line = f.readline()
+                if not qual_line:
+                    break
+                read_bytes += len(qual_line)
+
+                # quality line to PHRED
+                quality_str = qual_line.decode("utf-8", errors="ignore")
+                scores = self.compute_phred_scores(quality_str)
+                for idx, val in enumerate(scores):
+                    partial_sums[idx][0] += val
+                    partial_sums[idx][1] += 1
+
+                if f.tell() >= chunk_end:
+
+                    break
 
         return partial_sums
 
@@ -148,9 +172,9 @@ def output_phred_results(all_averages, output_prefix, run_index, workers):
 
     Args:
         all_averages (dict): { filename: { pos: average_score } }
-        output_prefix (str): If None, print to STDOUT. Otherwise CSV to files.
+        output_prefix (str): If None, print to STDOUT. Otherwise CSV.
         run_index (int): The run # for performance.
-        workers (int): The reported worker count (for numeric stability).
+        workers (int): The reported worker count .
     """
     if output_prefix:
         # One CSV per file
