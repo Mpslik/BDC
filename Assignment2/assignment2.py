@@ -140,7 +140,7 @@ class Server(mp.Process):
         self.host = host
         self.port = port
         self.files = files
-        self.output = output
+        self.output = output  # <--- 'output' is the FileType or None
         self.chunks = chunks
 
     def run(self):
@@ -166,18 +166,20 @@ class Server(mp.Process):
             print("Collected a result.", file=sys.stderr)
 
         # Aggregate all results
-        # Each result is {pos: [sum, count]}
         final_scores = defaultdict(lambda: [0, 0])
         for res in results:
             for pos, (s, c) in res.items():
                 final_scores[pos][0] += s
                 final_scores[pos][1] += c
 
-        final_means = {pos: final_scores[pos][0] / final_scores[pos][1] for pos in final_scores}
+        final_means = {
+            pos: final_scores[pos][0] / final_scores[pos][1]
+            for pos in final_scores
+        }
 
         # Output results in CSV format
-        if self.output_file:
-            writer = csv.writer(self.output_file)
+        if self.output:  # <--- Changed here
+            writer = csv.writer(self.output)
         else:
             writer = csv.writer(sys.stdout)
         writer.writerow(["line_number", "average_phredscore"])
