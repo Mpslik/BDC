@@ -135,6 +135,7 @@ class PhredscoreCalculator:
 
         return partial_sums
 
+
 def output_phred_results(all_averages, output_prefix, run_index, workers):
     """
     Output the final average PHRED scores. If output_prefix is given,
@@ -164,7 +165,6 @@ def output_phred_results(all_averages, output_prefix, run_index, workers):
                 print(f"{pos},{posdict[pos]},{fname}")
 
 
-
 def main():
     """
     Main function:
@@ -180,7 +180,7 @@ def main():
 
     start_time = MPI.Wtime()
 
-    calculator = PhredscoreCalculator(n_chunks=args.chunks)
+    calculator = PhredscoreCalculator(n_chunks=args.n)
 
     if rank == 0:
         # Controller
