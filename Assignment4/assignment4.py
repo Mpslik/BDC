@@ -17,9 +17,7 @@ __version__ = "0.1"
 
 import argparse
 import csv
-import os
 import sys
-import time
 from collections import defaultdict
 from mpi4py import MPI
 from pathlib import Path
@@ -30,7 +28,40 @@ def parse_args():
     """
     Parse command-line arguments to configure the script's execution parameters.
     """
-    pass
+    parser = argparse.ArgumentParser(
+        description="Calculate average PHRED scores using MPI, naive byte chunking."
+    )
+    parser.add_argument(
+        "--files",
+        nargs="+",
+        required=True,
+        help="List of FastQ files to process."
+    )
+    parser.add_argument(
+        "--chunks",
+        type=int,
+        default=4,
+        help="Number of chunks per file (naive byte-splitting)."
+    )
+    parser.add_argument(
+        "--run-index",
+        type=int,
+        default=1,
+        help="Which run index (for performance/replication experiments)."
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=0,
+        help="Reported worker count (if doing numeric stability tests)."
+    )
+    parser.add_argument(
+        "--output-prefix",
+        type=str,
+        default=None,
+        help="If set, output results to CSVs with this prefix. Otherwise, to STDOUT."
+    )
+    return parser.parse_args()
 
 
 class PhredscoreCalculator:
