@@ -94,8 +94,7 @@ class PhredscoreCalculator:
 
     def chunk_file(self, file_path: Path):
         """
-        Split 'file_path' into self.n_chunks by naive byte-splitting,
-        just like in Assignment 1.
+        Split 'file_path' into self.n_chunks by naive byte-splitting.
 
         Yields (file_path, start, end).
         """
@@ -124,7 +123,7 @@ class PhredscoreCalculator:
         partial_sums = defaultdict(lambda: [0.0, 0.0])
 
         i = 0
-        # We assume the 4th line in each block is a quality line
+        # the 4th line in each block is a quality line
         while i < len(lines) - 3:
             # lines[i+3] is the quality line
             quality_line = lines[i + 3].decode("utf-8", errors="ignore")
@@ -136,19 +135,34 @@ class PhredscoreCalculator:
 
         return partial_sums
 
-def output_format_selector(phredscores, output_prefix, nfiles, run_index, workers):
+def output_phred_results(all_averages, output_prefix, run_index, workers):
     """
-    Decide how to output results. If output_prefix is given, write results to CSV files.
-    Otherwise, print to STDOUT.
+    Output the final average PHRED scores. If output_prefix is given,
+    write each file's results to <prefix>_fileN_runX_wY.csv. Otherwise print to STDOUT.
 
     Args:
-        phredscores (dict): A dictionary mapping filename -> {position: avg_score}
-        output_prefix (str): Prefix for output files or None for STDOUT.
-        nfiles (int): Number of input files processed.
-        run_index (int): The run number for performance experiments.
-        workers (int): Number of worker processes.
+        all_averages (dict): { filename: { pos: average_score } }
+        output_prefix (str): If None, print to STDOUT. Otherwise CSV to files.
+        run_index (int): The run # for performance.
+        workers (int): The reported worker count (for numeric stability).
     """
-    pass
+    if output_prefix:
+        # One CSV per file
+        for idx, (fname, posdict) in enumerate(all_averages.items(), start=1):
+            out_name = f"{output_prefix}_file{idx}_run{run_index}_w{workers}.csv"
+            with open(out_name, "w", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(["Position", "AveragePHRED"])
+                for pos in sorted(posdict.keys()):
+                    writer.writerow([pos, posdict[pos]])
+        print(f"# [Rank0] Wrote {len(all_averages)} CSV(s) with prefix='{output_prefix}'")
+    else:
+        # Print to STDOUT
+        print("Position,AveragePHRED,Filename")
+        for fname, posdict in all_averages.items():
+            for pos in sorted(posdict.keys()):
+                print(f"{pos},{posdict[pos]},{fname}")
+
 
 
 def main():
