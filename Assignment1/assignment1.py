@@ -121,6 +121,37 @@ def aggregate_results(results: List[Tuple[Path, np.ndarray, np.ndarray]], fastq_
             for index, score in enumerate(average_phred_scores):
                 print(f"{index},{score}")
 
+def find_read_boundaries(filepath: Path) -> List[int]:
+    """
+    Read the file in 4-line FASTQ chunks and record the byte offset where each read begins.
+    Return a list of offsets (start of each read), plus the final file offset for convenience.
+    """
+    offsets = []
+    with open(filepath, "rb") as f:
+        while True:
+            start_offset = f.tell()
+            line = f.readline()  # @header line
+            if not line:
+                # End of file
+                break
+            if not line.startswith(b"@"):
+                # Not a valid FASTQ read start, skip
+                continue
+            # Found a valid read start => store it
+            offsets.append(start_offset)
+
+            # Skip next 3 lines: seq, plus, quality
+            seq_line = f.readline()
+            plus_line = f.readline()
+            qual_line = f.readline()
+            if not (seq_line and plus_line and qual_line):
+                # If we don't have full 4 lines, we've hit EOF or invalid record
+                break
+
+    # Also append final offset (i.e., EOF)
+    offsets.append(f.tell())
+    return offsets
+
 
 def get_chunks(file_paths: List[Path], number_of_chunks: int) -> List[Tuple[Path, int, int]]:
     """Divide files into chunks for parallel processing."""
