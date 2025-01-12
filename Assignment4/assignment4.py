@@ -24,6 +24,11 @@ from pathlib import Path
 import numpy as np
 
 
+def zero_pair():
+    """Return [0.0, 0.0] to avoid unpickleable lambdas."""
+    return [0.0, 0.0]
+
+
 def parse_args():
     """
     Parse command-line arguments to configure the script's execution parameters.
@@ -215,7 +220,7 @@ def main():
             # Merge
             for fname, partial_dict in worker_partials.items():
                 if fname not in combined:
-                    combined[fname] = defaultdict(lambda: [0.0, 0.0])
+                    combined[fname] = defaultdict(zero_pair)
                 for pos, (s, c) in partial_dict.items():
                     combined[fname][pos][0] += s
                     combined[fname][pos][1] += c
@@ -251,7 +256,7 @@ def main():
         for (chunkinfo, fname) in my_tasks:
             sums_map = calculator.process_chunk(chunkinfo)
             if fname not in partial_results:
-                partial_results[fname] = defaultdict(lambda: [0.0, 0.0])
+                partial_results[fname] = defaultdict(zero_pair)
             for pos, (s, c) in sums_map.items():
                 partial_results[fname][pos][0] += s
                 partial_results[fname][pos][1] += c
