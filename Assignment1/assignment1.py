@@ -153,21 +153,18 @@ def find_read_boundaries(filepath: Path) -> List[int]:
     return offsets
 
 
-def get_chunks(file_paths: List[Path], number_of_chunks: int) -> List[Tuple[Path, int, int]]:
-    """Divide files into chunks for parallel processing."""
-    chunks = []
-    chunks_per_file = number_of_chunks // len(file_paths)
+def get_chunks(file_paths: List[Path], n_cores: int) -> List[Tuple[Path, int, int]]:
+    """
+    Create read-boundary chunks for each file. We'll simply allocate `n_cores` chunks
+    per file. (So total chunks = n_cores * len(file_paths).)
+
+    If you have 2 files and -n 8, we'll create 8 chunks per file => 16 total chunks.
+    """
+    all_chunks = []
     for file_path in file_paths:
-        file_size = file_path.stat().st_size
-        chunk_size = file_size // chunks_per_file
-        start = 0
-        stop = chunk_size
-        while stop < file_size:
-            chunks.append((file_path, start, stop))
-            start = stop
-            stop += chunk_size
-        chunks.append((file_path, start, file_size))
-    return chunks
+        file_chunks = make_chunks_for_file(file_path, n_cores)
+        all_chunks.extend(file_chunks)
+    return all_chunks
 
 
 def main():
