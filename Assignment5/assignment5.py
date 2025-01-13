@@ -32,7 +32,7 @@ from pyspark.sql.types import (
 from Bio import SeqIO
 from Bio.SeqFeature import CompoundLocation
 
-FILENAME = "archaea.3.genomic.gbff"
+FILENAME = "archaea.2.genomic.gbff"
 FILEPATH = "/data/datasets/NCBI/refseq/ftp.ncbi.nlm.nih.gov/refseq/release/archaea/" + FILENAME
 FEATURES_TO_KEEP = ["ncRNA", "rRNA", "gene", "propeptide", "CDS"]
 
