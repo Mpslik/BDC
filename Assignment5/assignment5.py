@@ -55,10 +55,11 @@ def make_spark_session():
     spark_session = (SparkSession.builder
              .appName("assignment5_mats")
              .master("spark://mycluster:7077")
-             .config("spark.driver.memory", "16g")
-             .config("spark.executor.memory", "16g")
+             .config("spark.driver.memory", "64g")
+             .config("spark.executor.memory", "64g")
              .config("spark.executor.cores", "16")
              .getOrCreate())
+    spark.conf.set("spark.task.maxBroadcastSize", "2m")
     return spark_session
 
 
@@ -127,7 +128,7 @@ def parse_gbff_to_df(spark_session, gbff_path):
     Accumulates lines per record, parse with Biopython, and returns a Spark DF.
     """
     # Read lines in parallel
-    lines_rdd = spark_session.sparkContext.textFile(gbff_path, minPartitions=100)  # automatically partitions
+    lines_rdd = spark_session.sparkContext.textFile(gbff_path)  # automatically partitions
 
     # Parse_partition_of_lines => yields feature dicts
     parsed_rdd = lines_rdd.mapPartitions(parse_partition_of_lines)
