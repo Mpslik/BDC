@@ -60,9 +60,6 @@ def make_spark_session():
         .config("spark.driver.memory", "128g")
         .getOrCreate()
     )
-    # Optionally reduce logging
-    spark_session.sparkContext.setLogLevel("OFF")
-    spark_session.conf.set("spark.task.maxBroadcastSize", "2m")
     return spark_session
 
 
