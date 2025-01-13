@@ -53,7 +53,6 @@ def make_spark_session():
     """
     spark = (
         SparkSession.builder
-        .appName("assignment5_mats")
         .master("local[16]")
         .config("spark.driver.memory", "64g")
         .config("spark.executor.memory", "64g")
