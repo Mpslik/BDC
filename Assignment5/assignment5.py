@@ -121,6 +121,55 @@ def parse_gbff_to_df(spark_session, gbff_path):
     return df_ok
 
 
+def separate_genes(features_df):
+    """
+    Identify 'gene' features that do NOT match any 'CDS'
+    on (accession, start, end).
+
+    Returns a tuple: (df_with_cryptic_removed, df_cryptic_genes)
+
+    """
+    # Genes
+    df_genes = features_df.filter(F.col("feature_type") == "gene").alias("g")
+    # CDS
+    df_cds = features_df.filter(F.col("feature_type") == "CDS").alias("c")
+
+    # Genes that match a CDS by accession + start/end
+    matched_genes = df_genes.join(
+        df_cds,
+        on=[
+            df_genes.accession_id == df_cds.accession_id,
+            df_genes.start_pos == df_cds.start_pos,
+            df_genes.end_pos == df_cds.end_pos
+        ],
+        how="inner"
+    ).select("g.*")
+
+    # Cryptic = all genes minus matched
+    cryptic_genes = df_genes.join(
+        matched_genes,
+        on=[
+            df_genes.accession_id == matched_genes.accession_id,
+            df_genes.start_pos == matched_genes.start_pos,
+            df_genes.end_pos == matched_genes.end_pos,
+        ],
+        how="left_anti"
+    )
+
+    # Remove these cryptic genes from the main DF
+    df_without_coding_genes = features_df.join(
+        matched_genes,
+        on=[
+            features_df.feature_type == matched_genes.feature_type,
+            features_df.accession_id == matched_genes.accession_id,
+            features_df.start_pos == matched_genes.start_pos,
+            features_df.end_pos == matched_genes.end_pos,
+        ],
+        how="left_anti"
+    )
+
+    return df_without_coding_genes, cryptic_genes
+
 
 def main():
     """
