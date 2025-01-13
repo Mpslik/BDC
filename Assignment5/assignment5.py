@@ -86,9 +86,10 @@ def make_spark_session():
     """
     spark_session = (
         SparkSession.builder
+        .appName("assignment5")
         .master("local[16]")
-        .config("spark.executor.memory", "64g")
-        .config("spark.driver.memory", "64g")
+        .config("spark.executor.memory", "128g")
+        .config("spark.driver.memory", "128g")
         .getOrCreate()
     )
     # Optionally reduce logging
