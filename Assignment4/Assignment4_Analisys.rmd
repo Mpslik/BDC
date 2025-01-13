@@ -1,0 +1,106 @@
+---
+title: "Assignment 4 Analysis"
+author: "Mats Slik"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output: html_document
+---
+## Summary
+
+### completion time and PHRED scores
+
+the diffrent runs reveal the following key points:
+* PHRED scores accuracies
+  + between every worker amount and each run the mean PHRED score remains 33.9 with SD 2.51
+  + this indicates that the accuracy and floating point rounding is independent of the amount of workers used.
+
+* Completion time and amount of workers
+  + The amount of time needed greatly decreases as the amount of workers used increases.
+  + the fastest times when observed with four workers.
+
+* variability
+  + in the runs with 3 workers the most amount of variability between completion times was observed with it going from 232.77 seconds tot 312 seconds
+  + this maybe due to system-level factors or inefficiencies in the code.
+
+* Overal
+  + the best configuration for my code is the 4 workers, it is the fastest and maintains accuracy.
+
+```{r, echo=FALSE}
+setwd("C:\\Users\\matsp\\Documents\\Bio-Infromatiscs-jaar3\\Thema_12\\BDC\\Assignment4")
+# Load required libraries
+library(dplyr)
+
+# Load completion times from the error log
+completion_file <- "assignment4_bench_5678.err"
+
+# Read the file and extract completion times
+completion_lines <- readLines(completion_file)
+completion_times <- as.numeric(gsub("^# \\[Rank0\\] Finished in ([0-9.]+) seconds$", "\\1", completion_lines))
+
+
+# Associate completion times with worker and run combinations
+# Assigning times to worker counts and runs
+worker_run_map <- data.frame(
+  Worker_Main = rep(1:4, each = 3),
+  Run_Index = rep(1:3, times = 4),
+  Completion_Time_Seconds = completion_times
+)
+
+
+# Merge with PHRED score data
+# Load CSV files and combine them
+file_pattern <- "^run_w\\d+_r\\d+_file\\d+_run\\d+_w\\d+\\.csv$"
+files <- list.files(path = ".", pattern = file_pattern, full.names = TRUE)
+
+parse_file_info <- function(filename) {
+  worker_main <- as.numeric(sub("^run_w(\\d+)_.*$", "\\1", basename(filename)))
+  replicate   <- as.numeric(sub("^run_w\\d+_r(\\d+)_.*$", "\\1", basename(filename)))
+  run_index   <- as.numeric(sub("^run_w\\d+_r\\d+_file\\d+_run(\\d+)_.*$", "\\1", basename(filename)))
+  return(list(worker_main = worker_main, replicate = replicate, run_index = run_index))
+}
+
+# Read all CSVs and extract PHRED scores
+phred_data <- do.call(rbind, lapply(files, function(file) {
+  data <- read.csv(file, header = TRUE, stringsAsFactors = FALSE)
+  file_info <- parse_file_info(file)
+  data$Worker_Main <- file_info$worker_main
+  data$Replicate <- file_info$replicate
+  data$Run_Index <- file_info$run_index
+  return(data)
+}))
+
+# Combining PHRED data with timing data
+merged_data <- left_join(
+  phred_data,
+  worker_run_map,
+  by = c("Worker_Main", "Run_Index")
+)
+
+# Summarize and Analyze Results
+# Calculate mean and standard deviation of PHRED scores and completion times
+summary_data <- merged_data %>%
+  group_by(Worker_Main, Run_Index) %>%
+  summarize(
+    Mean_PHRED = mean(AveragePHRED, na.rm = TRUE),
+    SD_PHRED = sd(AveragePHRED, na.rm = TRUE),
+    Completion_Time_Seconds = first(Completion_Time_Seconds),  # Use associated time
+    .groups = 'drop'
+  )
+
+cat("\n## Summary Statistics by Worker Count and Run:\n")
+
+#Display Results in Markdown
+unique_workers <- unique(summary_data$Worker_Main)
+
+for (worker in unique_workers) {
+  cat(sprintf("\n### Worker Count: %d\n\n", worker))
+  worker_data <- summary_data %>% filter(Worker_Main == worker)
+  for (run in unique(worker_data$Run_Index)) {
+    run_data <- worker_data %>% filter(Run_Index == run)
+    cat(sprintf("**Run %d**\n", run))
+    cat(sprintf("Mean PHRED: %.2f, SD PHRED: %.2f, Completion Time: %.2f seconds\n",
+                run_data$Mean_PHRED, run_data$SD_PHRED, run_data$Completion_Time_Seconds))
+  }
+}
+```
+##
+
