@@ -48,38 +48,6 @@ schema_for_features = StructType([
 ])
 
 
-def parse_single_record(record_text: str):
-    """
-    Parse a GenBank record chunk with Biopython.
-
-    Returns: a list of dicts of relevant features.
-    """
-    parsed_features = []
-    for biorec in SeqIO.parse(StringIO(record_text), "genbank"):
-        org = biorec.annotations.get("organism", "")
-        for feat in biorec.features:
-            if feat.type not in FEATURES_TO_KEEP:
-                continue
-
-            start = int(feat.location.start)
-            end = int(feat.location.end)
-            if isinstance(feat.location, CompoundLocation):
-                start = int(feat.location.parts[0].start)
-                end = int(feat.location.parts[-1].end)
-
-            is_protein = bool(feat.type == "CDS" and "protein_id" in feat.qualifiers)
-
-            parsed_features.append({
-                "accession_id": biorec.id,
-                "feature_type": feat.type,
-                "start_pos": start,
-                "end_pos": end,
-                "organism_name": org,
-                "protein_flag": is_protein,
-            })
-    return parsed_features
-
-
 def make_spark_session():
     """
     Creates and returns a Spark session with desired config.
@@ -98,27 +66,83 @@ def make_spark_session():
     return spark_session
 
 
+def parse_partition_of_lines(lines_iter):
+    """
+    Partition-level function:
+    Accumulates lines until we see '//' (the GBFF record boundary).parses that record chunk with Biopython.
+
+    Yields dictionaries representing the relevant features
+    """
+    buffer = []
+    for line in lines_iter:
+        buffer.append(line)
+        if line.strip() == "//":
+            # We have a complete record in 'buffer'
+            record_text = "\n".join(buffer).strip()
+            buffer.clear()  # reset for next record
+
+            # Now parse that single record with Biopython
+            yield from parse_record_text(record_text)
+
+    # If buffer has leftover lines without '//', we typically ignore them
+    # or handle partial records if your file might not end with '//'.
+
+
+def parse_record_text(record_chunk):
+    """
+    Parse a single record chunk using Biopython.
+    Returns a list (or generator) of feature dictionaries.
+    """
+    features_found = []
+
+    for biorec in SeqIO.parse(StringIO(record_chunk), "genbank"):
+        organism_value = biorec.annotations.get("organism", "")
+
+        for feat in biorec.features:
+            if feat.type not in FEATURES_TO_KEEP:
+                continue
+
+            start_val = int(feat.location.start)
+            end_val = int(feat.location.end)
+            if isinstance(feat.location, CompoundLocation):
+                start_val = int(feat.location.parts[0].start)
+                end_val = int(feat.location.parts[-1].end)
+
+            protein_bool = bool(
+                feat.type == "CDS" and
+                "protein_id" in feat.qualifiers
+            )
+
+            features_found.append({
+                "accession_id": biorec.id,
+                "feature_type": feat.type,
+                "start_pos": start_val,
+                "end_pos": end_val,
+                "organism_name": organism_value,
+                "protein_flag": protein_bool,
+            })
+
+    return features_found
+
+
 def parse_gbff_to_df(spark_session, gbff_path):
     """
-    1. Read entire GBFF file from `gbff_path`.
-    2. Split into records by "//"
-    3. Parallelize, parse each record with Biopython => flatten => Spark DF
-    4. Filter out ambiguous (< or >) coords if necessary
+    Reads the GBFF file line-by-line.
+    Accumulates lines per record, parse with Biopython, and returns a Spark DF.
     """
-    with open(gbff_path, mode="r", encoding="utf-8") as fhandle:
-        content = fhandle.read()
+    # Read lines in parallel
+    lines_rdd = spark_session.sparkContext.textFile(gbff_path)  # automatically partitions
 
-    # Each record ends with "//"
-    raw_records = content.split("//\n")
-    # Re-attach "//" so Biopython recognizes it
-    records_cleaned = [r.strip() + "\n//" for r in raw_records if r.strip()]
+    # Parse_partition_of_lines => yields feature dicts
+    parsed_rdd = lines_rdd.mapPartitions(parse_partition_of_lines)
 
-    # Parallel parse
-    rdd_parsed = spark_session.sparkContext.parallelize(records_cleaned, 16).flatMap(parse_single_record)
-    df_full = spark_session.createDataFrame(rdd_parsed, schema=schema_for_features)
+    # Convert to DataFrame
+    df_full = spark_session.createDataFrame(parsed_rdd, schema=schema_for_features)
 
+    # Filter negative or invalid coords if needed
     df_ok = df_full.filter(F.col("start_pos") >= 0).filter(F.col("end_pos") >= 0)
 
+    # Keep relevant features
     df_ok = df_ok.filter(F.col("feature_type").isin(FEATURES_TO_KEEP))
 
     return df_ok
