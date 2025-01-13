@@ -30,7 +30,6 @@ from pyspark.sql.types import (
 from Bio import SeqIO
 from Bio.SeqFeature import CompoundLocation
 
-
 FILENAME = "archaea.2.genomic.gbff"
 FILEPATH = "/data/datasets/NCBI/refseq/ftp.ncbi.nlm.nih.gov/refseq/release/archaea/" + FILENAME
 
@@ -38,16 +37,46 @@ FEATURES_TO_KEEP = ["ncRNA", "rRNA", "gene", "propeptide", "CDS"]
 
 # Define Spark schema
 schema_for_features = StructType([
-    StructField("accession_id",   StringType(),  True),
-    StructField("feature_type",   StringType(),  True),
-    StructField("start_pos",      IntegerType(), True),
-    StructField("end_pos",        IntegerType(), True),
-    StructField("organism_name",  StringType(),  True),
-    StructField("protein_flag",   BooleanType(), True),
+    StructField("accession_id", StringType(), True),
+    StructField("feature_type", StringType(), True),
+    StructField("start_pos", IntegerType(), True),
+    StructField("end_pos", IntegerType(), True),
+    StructField("organism_name", StringType(), True),
+    StructField("protein_flag", BooleanType(), True),
 ])
 
-def parse_args():
-    pass
+
+def parse_single_record(record_text: str):
+    """
+    Parse a GenBank record chunk with Biopython.
+
+    Returns: a list of dicts of relevant features.
+    """
+    parsed_features = []
+    for biorec in SeqIO.parse(StringIO(record_text), "genbank"):
+        org = biorec.annotations.get("organism", "")
+        for feat in biorec.features:
+            if feat.type not in FEATURES_TO_KEEP:
+                continue
+
+            start = int(feat.location.start)
+            end = int(feat.location.end)
+            if isinstance(feat.location, CompoundLocation):
+                start = int(feat.location.parts[0].start)
+                end = int(feat.location.parts[-1].end)
+
+            is_protein = bool(feat.type == "CDS" and "protein_id" in feat.qualifiers)
+
+            parsed_features.append({
+                "accession_id": biorec.id,
+                "feature_type": feat.type,
+                "start_pos": start,
+                "end_pos": end,
+                "organism_name": org,
+                "protein_flag": is_protein,
+            })
+    return parsed_features
+
 
 
 def extract_records():
@@ -74,4 +103,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
