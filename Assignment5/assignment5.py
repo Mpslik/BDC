@@ -209,7 +209,20 @@ def question_2(df_no_cds_genes, cryptic_df):
     print("Question2: What is the ratio between coding and non-coding features? (coding / non-coding totals)")
     print(f"The ratio of coding/ non-coding = {round(ratio, 3)}.")
 
-def question_3():
+def question_3(features_df):
+    """
+    Q3: Minimum and maximum number of proteins (CDS with protein_flag=True).
+    """
+    only_prot_cds = features_df.filter(
+        (F.col("protein_flag") == True) & (F.col("feature_type") == "CDS")
+    )
+    org_counts = only_prot_cds.groupBy("organism_name").agg(F.count("*").alias("count"))
+    min_max = org_counts.agg(
+        F.min("count").alias("minimum"),
+        F.max("count").alias("maximum")
+    ).first()
+    print("Question3: What are the minimum and maximum number of proteins of all organisms in the file?")
+    print(f"Minimum = {min_max['minimum']} and maximum = {min_max['maximum']}")
 
 def question_4():
 
