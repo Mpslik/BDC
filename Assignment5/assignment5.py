@@ -196,6 +196,13 @@ def question_4(df, cryptic_df):
         df.filter(~F.col("type").isin(["rRNA", "ncRNA"]))
         .join(cryptic_df, on="accession", how="left_anti")
     )
+    table_name = "coding_spark_frame"
+    table_path = f"spark-warehouse/{table_name}"
+
+    # Remove directory if it exists
+    if os.path.exists(table_path):
+        shutil.rmtree(table_path)
+
     coding_only.write.saveAsTable("coding_spark_frame")
     print("Q4: Saved coding features as a separate table.")
 
