@@ -172,7 +172,19 @@ def separate_genes(features_df):
 
 # Methods for awnsering the questions of assignment 5
 
-def question_1():
+def question_1(archaea_features):
+    """
+        Q1: How many features does an Archaea genome have on average?
+        """
+
+    avg_feats = (
+        archaea_features.groupBy("accession_id")
+        .count()
+        .agg(F.avg("count"))
+        .collect()[0][0]
+    )
+    print("Question 1: How many features does an Archaea genome have on average?")
+    print(f"An Archaea genome has {round(avg_feats)} features on average")
 
 def question_2():
 
