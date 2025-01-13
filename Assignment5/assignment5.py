@@ -32,7 +32,7 @@ from pyspark.sql.types import (
 from Bio import SeqIO
 from Bio.SeqFeature import CompoundLocation
 
-FILENAME = "archaea.2.genomic.gbff"
+FILENAME = "archaea.3.genomic.gbff"
 FILEPATH = "/data/datasets/NCBI/refseq/ftp.ncbi.nlm.nih.gov/refseq/release/archaea/" + FILENAME
 
 FEATURES_TO_KEEP = ["ncRNA", "rRNA", "gene", "propeptide", "CDS"]
@@ -53,7 +53,12 @@ def make_spark_session():
     Creates and returns a Spark session with desired config.
     """
     spark_session = (
-        SparkSession.builder.appName("assignment5").master("spark://spark.bin.bioinf.nl:7077").getOrCreate()
+        SparkSession.builder
+        .appName("assignment5")
+        .master("local[16]")
+        .config("spark.executor.memory", "128g")
+        .config("spark.driver.memory", "128g")
+        .getOrCreate()
     )
     # Optionally reduce logging
     spark_session.sparkContext.setLogLevel("OFF")
