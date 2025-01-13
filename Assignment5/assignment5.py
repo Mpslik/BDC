@@ -77,7 +77,21 @@ def parse_single_record(record_text: str):
             })
     return parsed_features
 
-
+def make_spark_session():
+    """
+    Creates and returns a Spark session with desired config.
+    """
+    spark_sess = (
+        SparkSession.builder
+        .master("local[16]")
+        .config("spark.executor.memory", "64g")
+        .config("spark.driver.memory", "64g")
+        .getOrCreate()
+    )
+    # Optionally reduce logging
+    spark_sess.sparkContext.setLogLevel("OFF")
+    spark_sess.conf.set("spark.task.maxBroadcastSize", "2m")
+    return spark_sess
 
 def extract_records():
     pass
