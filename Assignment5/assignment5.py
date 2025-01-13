@@ -55,8 +55,8 @@ def make_spark_session():
     spark_session = (SparkSession.builder
              .appName("assignment5_mats")
              .master("local[16]")
-             .config("spark.driver.memory", "128g")
-             .config("spark.executor.memory", "128g")
+             .config("spark.driver.memory", "64g")
+             .config("spark.executor.memory", "64g")
              .getOrCreate())
     spark.conf.set("spark.task.maxBroadcastSize", "16m")
     return spark_session
