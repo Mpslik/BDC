@@ -52,14 +52,16 @@ def make_spark_session():
     """
     Creates and returns a Spark session with desired config.
     """
-    spark_session = (SparkSession.builder
-             .appName("assignment5_mats")
-             .master("local[16]")
-             .config("spark.driver.memory", "64g")
-             .config("spark.executor.memory", "64g")
-             .getOrCreate())
+    spark = (
+        SparkSession.builder
+        .appName("assignment5_mats")
+        .master("local[16]")
+        .config("spark.driver.memory", "64g")
+        .config("spark.executor.memory", "64g")
+        .getOrCreate())
     spark.conf.set("spark.task.maxBroadcastSize", "16m")
-    return spark_session
+    spark.sparkContext.setLogLevel("WARN")
+    return spark
 
 
 def parse_partition_of_lines(lines_iter):
@@ -73,15 +75,10 @@ def parse_partition_of_lines(lines_iter):
     for line in lines_iter:
         buffer.append(line)
         if line.strip() == "//":
-            # We have a complete record in 'buffer'
-            record_text = "\n".join(buffer).strip()
-            buffer.clear()  # reset for next record
-
-            # Now parse that single record with Biopython
+            record_text = "\n".join(buffer)
+            buffer.clear()
+            # parse record:
             yield from parse_record_text(record_text)
-
-    # If buffer has leftover lines without '//', we typically ignore them
-    # or handle partial records if your file might not end with '//'.
 
 
 def parse_record_text(record_chunk):
@@ -89,36 +86,33 @@ def parse_record_text(record_chunk):
     Parse a single record chunk using Biopython.
     Returns a list (or generator) of feature dictionaries.
     """
-    features_found = []
-
+    features_out = []
     for biorec in SeqIO.parse(StringIO(record_chunk), "genbank"):
-        organism_value = biorec.annotations.get("organism", "")
-
+        organism_val = biorec.annotations.get("organism", "")
         for feat in biorec.features:
             if feat.type not in FEATURES_TO_KEEP:
                 continue
 
-            start_val = int(feat.location.start)
-            end_val = int(feat.location.end)
+            # handle location
             if isinstance(feat.location, CompoundLocation):
                 start_val = int(feat.location.parts[0].start)
                 end_val = int(feat.location.parts[-1].end)
+            else:
+                start_val = int(feat.location.start)
+                end_val = int(feat.location.end)
 
-            protein_bool = bool(
-                feat.type == "CDS" and
-                "protein_id" in feat.qualifiers
-            )
+            protein_bool = (feat.type == "CDS") and ("protein_id" in feat.qualifiers)
 
-            features_found.append({
+            features_out.append({
                 "accession_id": biorec.id,
                 "feature_type": feat.type,
                 "start_pos": start_val,
                 "end_pos": end_val,
-                "organism_name": organism_value,
+                "organism_name": organism_val,
                 "protein_flag": protein_bool,
             })
 
-    return features_found
+    return features_out
 
 
 def parse_gbff_to_df(spark_session, gbff_path):
@@ -179,14 +173,14 @@ def separate_genes(features_df):
         how="left_anti"
     )
 
-    # Remove these cryptic genes from the main DF
+    # Remove cryptic genes from the main DF
     df_without_coding_genes = features_df.join(
         matched_genes,
         on=[
             features_df.feature_type == matched_genes.feature_type,
             features_df.accession_id == matched_genes.accession_id,
             features_df.start_pos == matched_genes.start_pos,
-            features_df.end_pos == matched_genes.end_pos,
+            features_df.end_pos == matched_genes.end_pos
         ],
         how="left_anti"
     )
@@ -202,10 +196,9 @@ def question_1(archaea_features):
         """
 
     avg_feats = (
-        archaea_features.groupBy("accession_id")
-        .count()
+        archaea_features.groupBy("accession_id").count()
         .agg(F.avg("count"))
-        .collect()[0][0]
+        .first()[0]
     )
     print("Question 1: How many features does an Archaea genome have on average?")
     print(f"An Archaea genome has {round(avg_feats)} features on average")
@@ -275,10 +268,10 @@ def question_5(df_any):
     """
     Q5: Average feature length => end_pos - start_pos
     """
-    avg_len_row = (
-        df_any.withColumn("feat_len", F.expr("end_pos - start_pos"))
-        .agg(F.avg("feat_len"))
-        .collect()[0][0]
+    row_avg = (
+        df_any.withColumn("length", (F.col("end_pos") - F.col("start_pos")))
+          .agg(F.avg("length").alias("avg_length"))
+          .first()["avg_length"]
     )
     print("Question5: What is the average length of a feature?")
     print(f"Average length is:  {round(avg_len_row)}")
