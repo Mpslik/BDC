@@ -62,30 +62,19 @@ def make_spark_session():
     return spark
 
 
-def parse_partition_of_lines(lines_iter):
-    """
-    Partition-level function that accumulates lines until we see '//'
-    and parses that record chunk, yielding feature dicts.
-    """
-    buffer = []
-    for line in lines_iter:
-        buffer.append(line)
-        if line.strip() == "//":
-            record_text = "\n".join(buffer)
-            buffer.clear()
-            yield from parse_record_text(record_text)
-
-
 def parse_record_text(record_chunk):
     """
-    Generator function that parses a single record chunk using Biopython
-    and yields feature dictionaries.
+    Parse a single record chunk using Biopython.
+    Returns a list of feature dictionaries.
+    (Same logic as before, but now we'll use flatMap on the entire record text.)
     """
+    features_out = []
     for biorec in SeqIO.parse(StringIO(record_chunk), "genbank"):
         organism_val = biorec.annotations.get("organism", "")
         for feat in biorec.features:
             if feat.type not in FEATURES_TO_KEEP:
                 continue
+
             # handle location
             if isinstance(feat.location, CompoundLocation):
                 start_val = int(feat.location.parts[0].start)
@@ -96,32 +85,43 @@ def parse_record_text(record_chunk):
 
             protein_bool = (feat.type == "CDS") and ("protein_id" in feat.qualifiers)
 
-            yield {
+            features_out.append({
                 "accession_id": biorec.id,
                 "feature_type": feat.type,
                 "start_pos": start_val,
                 "end_pos": end_val,
                 "organism_name": organism_val,
                 "protein_flag": protein_bool,
-            }
+            })
+    return features_out
 
 
 def parse_gbff_to_df(spark_session, gbff_path):
     """
-    Reads the GBFF file line-by-line, accumulates lines per record,
-    parses with Biopython, and returns a Spark DF.
+    Reads the ENTIRE GBFF file at once, splits on //,
+    parallelizes that list, and returns a Spark DataFrame of features.
+    (Mimics the example's style of reading all data at once.)
     """
-    # Force more partitions if the file is large
-    lines_rdd = spark_session.sparkContext.textFile(gbff_path)
 
-    # For each partition, parse the lines
-    parsed_rdd = lines_rdd.mapPartitions(parse_partition_of_lines)
+    # Read entire file into memory
+    with open(gbff_path, "r", encoding="utf-8") as f:
+        file_object = f.read()
 
-    # Convert to Spark DataFrame
+    # Split on the GenBank record delimiter
+    records = file_object.split("//\n")
+    # Re-attach "//"
+    records = [rec + "//" for rec in records if rec.strip()]
+
+    records_rdd = spark_session.sparkContext.parallelize(records, 16)
+
+    # For each record, parse features via parse_record_text
+    parsed_rdd = records_rdd.flatMap(parse_record_text)
+
+    # Convert to a Spark DataFrame
     df_full = spark_session.createDataFrame(parsed_rdd, schema=schema_for_features)
 
-    # Filter out invalid coords
-    df_ok = df_full.filter((F.col("start_pos") >= 0) & (F.col("end_pos") >= 0))
+    # Filter negative or invalid coords if needed
+    df_ok = df_full.filter(F.col("start_pos") >= 0).filter(F.col("end_pos") >= 0)
 
     # Keep relevant features
     df_ok = df_ok.filter(F.col("feature_type").isin(FEATURES_TO_KEEP))
