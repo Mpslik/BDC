@@ -4,14 +4,14 @@
 BDC Assignment 5 - MapReduce & PySpark
 
 This script:
-1. Creates a Spark Session (either local or on a cluster).
-2. Reads a "gbff" file as text and infers a logical schema to extract genomic features.
-3. Performs several analyses:
-   - Average number of features per Archaea genome.
-   - Ratio of coding vs. non-coding features.
-   - Minimum and maximum number of proteins (coding sequences) across all organisms.
-   - Removes all non-coding (RNA) features and writes them to a separate DataFrame/disk.
-   - Computes the average length of a feature.
+1) Uses PySpark to read and parse a .gbff file for Archaea.
+2) Identifies cryptic genes (non-coding) vs. coding genes.
+3) Answers 5 questions:
+   Q1: Average number of features per Archaea genome?
+   Q2: Ratio coding vs. non-coding features?
+   Q3: Minimum and maximum number of proteins?
+   Q4: Remove non-coding RNA features and store the remainder separately.
+   Q5: Average feature length?
 """
 
 # Metadata
@@ -22,54 +22,29 @@ import os
 import shutil
 
 from io import StringIO
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+from pyspark.sql.types import (
+    StructType, StructField, StringType, BooleanType, IntegerType
+)
 from Bio import SeqIO
 from Bio.SeqFeature import CompoundLocation
 
-from pyspark.sql import SparkSession
-from pyspark.sql.types import (
-    StructType,
-    StructField,
-    StringType,
-    BooleanType,
-    IntegerType,
-)
-from pyspark.sql.functions import (
-    col,
-    avg,
-    count,
-    expr,
-    min as min_ps,
-    max as max_ps,
-)
-
 
 FILENAME = "archaea.2.genomic.gbff"
-FILE = "/data/datasets/NCBI/refseq/ftp.ncbi.nlm.nih.gov/refseq/release/archaea/" + FILENAME
+FILEPATH = "/data/datasets/NCBI/refseq/ftp.ncbi.nlm.nih.gov/refseq/release/archaea/" + FILENAME
 
-FEATURES_OF_INTEREST = ["ncRNA", "rRNA", "gene", "propeptide", "CDS"]
+FEATURES_TO_KEEP = ["ncRNA", "rRNA", "gene", "propeptide", "CDS"]
 
-# Spark session
-spark = (
-    SparkSession.builder.master("local[16]")
-    .config("spark.executor.memory", "64g")
-    .config("spark.driver.memory", "64g")
-    .getOrCreate()
-)
-spark.conf.set("spark.task.maxBroadcastSize", "2m")
-sc = spark.sparkContext
-sc.setLogLevel("OFF")
-
-# Schema for the final DataFrame
-feature_schema = StructType(
-    [
-        StructField("accession", StringType(), True),
-        StructField("type", StringType(), True),
-        StructField("location_start", IntegerType(), True),
-        StructField("location_end", IntegerType(), True),
-        StructField("organism", StringType(), True),
-        StructField("is_protein", BooleanType(), True),
-    ]
-)
+# Define Spark schema
+schema_for_features = StructType([
+    StructField("accession_id",   StringType(),  True),
+    StructField("feature_type",   StringType(),  True),
+    StructField("start_pos",      IntegerType(), True),
+    StructField("end_pos",        IntegerType(), True),
+    StructField("organism_name",  StringType(),  True),
+    StructField("protein_flag",   BooleanType(), True),
+])
 
 def parse_args():
     pass
