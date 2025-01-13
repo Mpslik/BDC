@@ -186,7 +186,28 @@ def question_1(archaea_features):
     print("Question 1: How many features does an Archaea genome have on average?")
     print(f"An Archaea genome has {round(avg_feats)} features on average")
 
-def question_2():
+def question_2(df_no_cds_genes, cryptic_df):
+    """
+        Q2: Ratio coding vs. non-coding features (coding / non-coding).
+
+        """
+
+    main_no_cryptic = df_no_cds_genes.join(cryptic_df, on="accession_id", how="left_anti")
+
+    # non-coding => rRNA, ncRNA plus cryptic
+    rna_cnt = main_no_cryptic.filter(F.col("feature_type").isin(["ncRNA", "rRNA"])).count()
+    cryptic_cnt = cryptic_df.count()
+    total_non_coding = rna_cnt + cryptic_cnt
+
+    # coding => propeptide, gene, CDS in main_no_cryptic
+    coding_cnt = main_no_cryptic.filter(
+        F.col("feature_type").isin(["gene", "CDS", "propeptide"])
+    ).count()
+
+    ratio = coding_cnt / total_non_coding if total_non_coding else 0
+
+    print("Question2: What is the ratio between coding and non-coding features? (coding / non-coding totals)")
+    print(f"The ratio of coding/ non-coding = {round(ratio, 3)}.")
 
 def question_3():
 
