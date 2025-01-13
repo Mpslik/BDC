@@ -66,12 +66,12 @@ def parse_record_text(record_chunk):
     """
     Parse a single record chunk using Biopython.
     Returns a list of feature dictionaries.
-    (Same logic as before, but now we'll use flatMap on the entire record text.)
     """
     features_out = []
     for biorec in SeqIO.parse(StringIO(record_chunk), "genbank"):
         organism_val = biorec.annotations.get("organism", "")
         for feat in biorec.features:
+
             if feat.type not in FEATURES_TO_KEEP:
                 continue
 
@@ -82,6 +82,9 @@ def parse_record_text(record_chunk):
             else:
                 start_val = int(feat.location.start)
                 end_val = int(feat.location.end)
+
+            if start_val < 0 or end_val < 0:
+                continue
 
             protein_bool = (feat.type == "CDS") and ("protein_id" in feat.qualifiers)
 
@@ -112,7 +115,7 @@ def parse_gbff_to_df(spark_session, gbff_path):
     # Re-attach "//"
     records = [rec + "//" for rec in records if rec.strip()]
 
-    records_rdd = spark_session.sparkContext.parallelize(records, 16)
+    records_rdd = spark_session.sparkContext.parallelize(records, 100)
 
     # For each record, parse features via parse_record_text
     parsed_rdd = records_rdd.flatMap(parse_record_text)
