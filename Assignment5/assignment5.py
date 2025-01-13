@@ -207,6 +207,5 @@ def main():
     spark_sess.stop()
 
 
-
 if __name__ == "__main__":
     main()
