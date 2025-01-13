@@ -86,6 +86,7 @@ def parse_record_text(record_chunk):
         for feat in biorec.features:
             if feat.type not in FEATURES_TO_KEEP:
                 continue
+            # handle location
             if isinstance(feat.location, CompoundLocation):
                 start_val = int(feat.location.parts[0].start)
                 end_val = int(feat.location.parts[-1].end)
@@ -111,7 +112,7 @@ def parse_gbff_to_df(spark_session, gbff_path):
     parses with Biopython, and returns a Spark DF.
     """
     # Force more partitions if the file is large
-    lines_rdd = spark_session.sparkContext.textFile(gbff_path, minPartitions=100)
+    lines_rdd = spark_session.sparkContext.textFile(gbff_path)
 
     # For each partition, parse the lines
     parsed_rdd = lines_rdd.mapPartitions(parse_partition_of_lines)
