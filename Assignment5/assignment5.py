@@ -54,12 +54,11 @@ def make_spark_session():
     """
     spark_session = (SparkSession.builder
              .appName("assignment5_mats")
-             .master("spark://mycluster:7077")
-             .config("spark.driver.memory", "64g")
-             .config("spark.executor.memory", "64g")
-             .config("spark.executor.cores", "16")
+             .master("local[16]")
+             .config("spark.driver.memory", "128g")
+             .config("spark.executor.memory", "128g")
              .getOrCreate())
-    spark.conf.set("spark.task.maxBroadcastSize", "2m")
+    spark.conf.set("spark.task.maxBroadcastSize", "16m")
     return spark_session
 
 
