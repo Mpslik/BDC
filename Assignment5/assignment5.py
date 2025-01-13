@@ -77,11 +77,12 @@ def parse_single_record(record_text: str):
             })
     return parsed_features
 
+
 def make_spark_session():
     """
     Creates and returns a Spark session with desired config.
     """
-    spark_sess = (
+    spark_session = (
         SparkSession.builder
         .master("local[16]")
         .config("spark.executor.memory", "64g")
@@ -89,9 +90,36 @@ def make_spark_session():
         .getOrCreate()
     )
     # Optionally reduce logging
-    spark_sess.sparkContext.setLogLevel("OFF")
-    spark_sess.conf.set("spark.task.maxBroadcastSize", "2m")
-    return spark_sess
+    spark_session.sparkContext.setLogLevel("OFF")
+    spark_session.conf.set("spark.task.maxBroadcastSize", "2m")
+    return spark_session
+
+
+def parse_gbff_to_df(spark_session, gbff_path):
+    """
+    1. Read entire GBFF file from `gbff_path`.
+    2. Split into records by "//"
+    3. Parallelize, parse each record with Biopython => flatten => Spark DF
+    4. Filter out ambiguous (< or >) coords if necessary
+    """
+    with open(gbff_path, mode="r", encoding="utf-8") as fhandle:
+        content = fhandle.read()
+
+    # Each record ends with "//"
+    raw_records = content.split("//\n")
+    # Re-attach "//" so Biopython recognizes it
+    records_cleaned = [r.strip() + "\n//" for r in raw_records if r.strip()]
+
+    # Parallel parse
+    rdd_parsed = spark_session.sparkContext.parallelize(records_cleaned, 16).flatMap(parse_single_record)
+    df_full = spark_session.createDataFrame(rdd_parsed, schema=schema_for_features)
+
+    df_ok = df_full.filter(F.col("start_pos") >= 0).filter(F.col("end_pos") >= 0)
+
+    df_ok = df_ok.filter(F.col("feature_type").isin(FEATURES_TO_KEEP))
+
+    return df_ok
+
 
 def extract_records():
     pass
