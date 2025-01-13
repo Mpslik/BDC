@@ -170,6 +170,18 @@ def separate_genes(features_df):
 
     return df_without_coding_genes, cryptic_genes
 
+# Methods for awnsering the questions of assignment 5
+
+def question_1():
+
+def question_2():
+
+def question_3():
+
+def question_4():
+
+def question_5():
+
 
 def main():
     """
