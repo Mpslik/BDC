@@ -34,7 +34,6 @@ from Bio.SeqFeature import CompoundLocation
 
 FILENAME = "archaea.3.genomic.gbff"
 FILEPATH = "/data/datasets/NCBI/refseq/ftp.ncbi.nlm.nih.gov/refseq/release/archaea/" + FILENAME
-
 FEATURES_TO_KEEP = ["ncRNA", "rRNA", "gene", "propeptide", "CDS"]
 
 # Define Spark schema
@@ -66,10 +65,8 @@ def make_spark_session():
 
 def parse_partition_of_lines(lines_iter):
     """
-    Partition-level function:
-    Accumulates lines until we see '//' (the GBFF record boundary).parses that record chunk with Biopython.
-
-    Yields dictionaries representing the relevant features
+    Partition-level function that accumulates lines until we see '//'
+    and parses that record chunk, yielding feature dicts.
     """
     buffer = []
     for line in lines_iter:
@@ -77,23 +74,19 @@ def parse_partition_of_lines(lines_iter):
         if line.strip() == "//":
             record_text = "\n".join(buffer)
             buffer.clear()
-            # parse record:
             yield from parse_record_text(record_text)
 
 
 def parse_record_text(record_chunk):
     """
-    Parse a single record chunk using Biopython.
-    Returns a list (or generator) of feature dictionaries.
+    Generator function that parses a single record chunk using Biopython
+    and yields feature dictionaries.
     """
-    features_out = []
     for biorec in SeqIO.parse(StringIO(record_chunk), "genbank"):
         organism_val = biorec.annotations.get("organism", "")
         for feat in biorec.features:
             if feat.type not in FEATURES_TO_KEEP:
                 continue
-
-            # handle location
             if isinstance(feat.location, CompoundLocation):
                 start_val = int(feat.location.parts[0].start)
                 end_val = int(feat.location.parts[-1].end)
@@ -103,34 +96,32 @@ def parse_record_text(record_chunk):
 
             protein_bool = (feat.type == "CDS") and ("protein_id" in feat.qualifiers)
 
-            features_out.append({
+            yield {
                 "accession_id": biorec.id,
                 "feature_type": feat.type,
                 "start_pos": start_val,
                 "end_pos": end_val,
                 "organism_name": organism_val,
                 "protein_flag": protein_bool,
-            })
-
-    return features_out
+            }
 
 
 def parse_gbff_to_df(spark_session, gbff_path):
     """
-    Reads the GBFF file line-by-line.
-    Accumulates lines per record, parse with Biopython, and returns a Spark DF.
+    Reads the GBFF file line-by-line, accumulates lines per record,
+    parses with Biopython, and returns a Spark DF.
     """
-    # Read lines in parallel
-    lines_rdd = spark_session.sparkContext.textFile(gbff_path)  # automatically partitions
+    # Force more partitions if the file is large
+    lines_rdd = spark_session.sparkContext.textFile(gbff_path, minPartitions=100)
 
-    # Parse_partition_of_lines => yields feature dicts
+    # For each partition, parse the lines
     parsed_rdd = lines_rdd.mapPartitions(parse_partition_of_lines)
 
-    # Convert to DataFrame
+    # Convert to Spark DataFrame
     df_full = spark_session.createDataFrame(parsed_rdd, schema=schema_for_features)
 
-    # Filter negative or invalid coords if needed
-    df_ok = df_full.filter(F.col("start_pos") >= 0).filter(F.col("end_pos") >= 0)
+    # Filter out invalid coords
+    df_ok = df_full.filter((F.col("start_pos") >= 0) & (F.col("end_pos") >= 0))
 
     # Keep relevant features
     df_ok = df_ok.filter(F.col("feature_type").isin(FEATURES_TO_KEEP))
@@ -265,22 +256,16 @@ def question_4(all_features, cryptic_df):
 
 
 def question_5(df_any):
-    """
-    Q5: Average feature length => end_pos - start_pos
-    """
     row_avg = (
         df_any.withColumn("length", (F.col("end_pos") - F.col("start_pos")))
-          .agg(F.avg("length").alias("avg_length"))
-          .first()["avg_length"]
+              .agg(F.avg("length").alias("avg_length"))
+              .first()["avg_length"]
     )
     print("Question5: What is the average length of a feature?")
-    print(f"Average length is:  {round(avg_len_row)}")
+    print(f"Average length is: {round(row_avg)}")
 
 
 def main():
-    """
-    Main
-    """
     spark_sess = make_spark_session()
 
     # 1) Read + parse
@@ -289,7 +274,7 @@ def main():
     # 2) Identify cryptic genes => remove from main DF
     df_no_coding_genes, cryptic_genes = separate_genes(df_parsed)
 
-    # 3) Answer questions in the same order, with same final prints
+    # 3) Answer questions
     question_1(df_no_coding_genes)
     print("\n")
     question_2(df_no_coding_genes, cryptic_genes)
@@ -299,6 +284,8 @@ def main():
     question_4(df_no_coding_genes, cryptic_genes)
     print("\n")
     question_5(df_no_coding_genes)
+
+    spark_sess.stop()
 
     # Done
     spark_sess.stop()
