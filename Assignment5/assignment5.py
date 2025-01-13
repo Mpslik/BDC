@@ -22,6 +22,8 @@ import os
 import shutil
 
 from io import StringIO
+
+from pyspark.shell import spark
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.types import (
@@ -170,6 +172,7 @@ def separate_genes(features_df):
 
     return df_without_coding_genes, cryptic_genes
 
+
 # Methods for awnsering the questions of assignment 5
 
 def question_1(archaea_features):
@@ -185,6 +188,7 @@ def question_1(archaea_features):
     )
     print("Question 1: How many features does an Archaea genome have on average?")
     print(f"An Archaea genome has {round(avg_feats)} features on average")
+
 
 def question_2(df_no_cds_genes, cryptic_df):
     """
@@ -209,6 +213,7 @@ def question_2(df_no_cds_genes, cryptic_df):
     print("Question2: What is the ratio between coding and non-coding features? (coding / non-coding totals)")
     print(f"The ratio of coding/ non-coding = {round(ratio, 3)}.")
 
+
 def question_3(features_df):
     """
     Q3: Minimum and maximum number of proteins (CDS with protein_flag=True).
@@ -224,15 +229,65 @@ def question_3(features_df):
     print("Question3: What are the minimum and maximum number of proteins of all organisms in the file?")
     print(f"Minimum = {min_max['minimum']} and maximum = {min_max['maximum']}")
 
-def question_4():
 
-def question_5():
+def question_4(all_features, cryptic_df):
+    """
+    Q4: Remove all non-coding (RNA) features => (rRNA, ncRNA) plus cryptic genes.
+    """
+    keep_code = all_features.filter(~(F.col("feature_type").isin(["rRNA", "ncRNA"])))
+    keep_code = keep_code.join(cryptic_df, on="accession_id", how="left_anti")
+
+    table_name = "coding_spark_frame"
+    spark.catalog.clearCache()
+
+    # Remove old table (dir) if it exists
+    if os.path.exists(f"spark-warehouse/{table_name}"):
+        shutil.rmtree(f"spark-warehouse/{table_name}")
+
+    # Save as table
+    keep_code.write.saveAsTable(table_name)
+    print("Question4: Remove all non-coding (RNA) features and write this as a separate DataFrame (Spark format)")
+    print(f"Wrote table -> {table_name}")
+
+
+def question_5(df_any):
+    """
+    Q5: Average feature length => end_pos - start_pos
+    """
+    avg_len_row = (
+        df_any.withColumn("feat_len", F.expr("end_pos - start_pos"))
+        .agg(F.avg("feat_len"))
+        .collect()[0][0]
+    )
+    print("Question5: What is the average length of a feature?")
+    print(f"Average length is:  {round(avg_len_row)}")
 
 
 def main():
     """
     Main
     """
+    spark_sess = make_spark_session()
+
+    # 1) Read + parse
+    df_parsed = parse_gbff_to_df(spark_sess, FILEPATH)
+
+    # 2) Identify cryptic genes => remove from main DF
+    df_no_coding_genes, cryptic_genes = separate_genes(df_parsed)
+
+    # 3) Answer questions in the same order, with same final prints
+    question_1(df_no_coding_genes)
+    print("\n")
+    question_2(df_no_coding_genes, cryptic_genes)
+    print("\n")
+    question_3(df_no_coding_genes)
+    print("\n")
+    question_4(df_no_coding_genes, cryptic_genes)
+    print("\n")
+    question_5(df_no_coding_genes)
+
+    # Done
+    spark_sess.stop()
 
 
 if __name__ == "__main__":
