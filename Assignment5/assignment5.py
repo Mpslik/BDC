@@ -59,7 +59,7 @@ def make_spark_session():
         .config("spark.executor.memory", "64g")
         .getOrCreate())
     spark.conf.set("spark.task.maxBroadcastSize", "16m")
-    spark.sparkContext.setLogLevel("WARN")
+    spark.sparkContext.setLogLevel("OFF")
     return spark
 
 
@@ -114,7 +114,7 @@ def parse_gbff_to_df(spark_session, gbff_path):
     Reads the GBFF file line-by-line, accumulates lines per record,
     parses with Biopython, and returns a Spark DF.
     """
-    lines_rdd = spark_session.sparkContext.textFile(gbff_path, minPartitions=100)
+    lines_rdd = spark_session.sparkContext.textFile(gbff_path)
 
     parsed_rdd = lines_rdd.mapPartitions(parse_partition_of_lines)
 
