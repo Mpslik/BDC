@@ -18,6 +18,58 @@ This script:
 __author__ = "Mats Slik"
 __version__ = "0.1"
 
+import os
+import shutil
+
+from io import StringIO
+from Bio import SeqIO
+from Bio.SeqFeature import CompoundLocation
+
+from pyspark.sql import SparkSession
+from pyspark.sql.types import (
+    StructType,
+    StructField,
+    StringType,
+    BooleanType,
+    IntegerType,
+)
+from pyspark.sql.functions import (
+    col,
+    avg,
+    count,
+    expr,
+    min as min_ps,
+    max as max_ps,
+)
+
+
+FILENAME = "archaea.2.genomic.gbff"
+FILE = "/data/datasets/NCBI/refseq/ftp.ncbi.nlm.nih.gov/refseq/release/archaea/" + FILENAME
+
+FEATURES_OF_INTEREST = ["ncRNA", "rRNA", "gene", "propeptide", "CDS"]
+
+# Spark session
+spark = (
+    SparkSession.builder.master("local[16]")
+    .config("spark.executor.memory", "64g")
+    .config("spark.driver.memory", "64g")
+    .getOrCreate()
+)
+spark.conf.set("spark.task.maxBroadcastSize", "2m")
+sc = spark.sparkContext
+sc.setLogLevel("OFF")
+
+# Schema for the final DataFrame
+feature_schema = StructType(
+    [
+        StructField("accession", StringType(), True),
+        StructField("type", StringType(), True),
+        StructField("location_start", IntegerType(), True),
+        StructField("location_end", IntegerType(), True),
+        StructField("organism", StringType(), True),
+        StructField("is_protein", BooleanType(), True),
+    ]
+)
 
 def parse_args():
     pass
