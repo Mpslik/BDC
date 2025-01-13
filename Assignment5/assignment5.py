@@ -121,21 +121,6 @@ def parse_gbff_to_df(spark_session, gbff_path):
     return df_ok
 
 
-def extract_records():
-    pass
-
-
-def parse_features():
-    pass
-
-
-def det_coding():
-    pass
-
-
-def calculate_statistics():
-    pass
-
 
 def main():
     """
