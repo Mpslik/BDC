@@ -172,6 +172,7 @@ def question_1(df):
         .agg(F.avg("count").alias("avg_features"))
         .first()["avg_features"]
     )
+    print("Q1: How many features does an Archaea genome have on average?")
     print(f"Q1: Average features per genome: {round(avg_features)}")
 
 
@@ -181,6 +182,7 @@ def question_2(df, cryptic_df):
     )
     coding_count = df.filter(F.col("type").isin(["gene", "CDS", "propeptide"])).count()
     ratio = coding_count / non_coding_count if non_coding_count else 0
+    print("Q2: What is the ratio between coding and non-coding features? (coding / non-coding totals)")
     print(f"Q2: Coding/Non-Coding Ratio: {round(ratio, 3)}")
 
 
@@ -188,6 +190,7 @@ def question_3(df):
     proteins = df.filter((F.col("type") == "CDS") & (F.col("is_protein") == True))
     org_counts = proteins.groupBy("organism").count()
     min_max = org_counts.agg(F.min("count").alias("min"), F.max("count").alias("max")).first()
+    print("Q3: What are the minimum and maximum number of proteins of all organisms in the file?")
     print(f"Q3: Min proteins: {min_max['min']}, Max proteins: {min_max['max']}")
 
 
@@ -204,6 +207,7 @@ def question_4(df, cryptic_df):
         shutil.rmtree(table_path)
 
     coding_only.write.saveAsTable("coding_spark_frame")
+    print("Q4: Remove all non-coding (RNA) features and write this as a separate DataFrame (Spark format)")
     print("Q4: Saved coding features as a separate table.")
 
 
@@ -213,6 +217,7 @@ def question_5(df):
         .agg(F.avg("length").alias("avg_length"))
         .first()["avg_length"]
     )
+    print("Q5: What is the average length of a feature?")
     print(f"Q5: Average feature length: {round(avg_length)}")
 
 
