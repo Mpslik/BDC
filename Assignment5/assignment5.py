@@ -53,12 +53,7 @@ def make_spark_session():
     Creates and returns a Spark session with desired config.
     """
     spark_session = (
-        SparkSession.builder
-        .appName("assignment5")
-        .master("local[16]")
-        .config("spark.executor.memory", "128g")
-        .config("spark.driver.memory", "128g")
-        .getOrCreate()
+        SparkSession.builder.appName("assignment5").master("spark://spark.bin.bioinf.nl:7077").getOrCreate()
     )
     # Optionally reduce logging
     spark_session.sparkContext.setLogLevel("OFF")
