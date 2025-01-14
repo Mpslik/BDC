@@ -182,7 +182,7 @@ class Server(mp.Process):
         self.host = host
         self.port = port
         self.files = files
-        self.output = output  # <--- 'output' is the FileType or None
+        self.output = output
         self.chunks = chunks
 
     def run(self):
@@ -220,7 +220,7 @@ class Server(mp.Process):
         }
 
         # Output results in CSV format
-        if self.output:  # <--- Changed here
+        if self.output:
             writer = csv.writer(self.output)
         else:
             writer = csv.writer(sys.stdout)
@@ -228,8 +228,11 @@ class Server(mp.Process):
         for pos in sorted(final_means.keys()):
             writer.writerow([pos, final_means[pos]])
 
-        # Signal termination to clients
-        job_queue.put(POISON_PILL)
+        # Send termination signals to clients
+        num_clients = mp.cpu_count()
+        for _ in range(num_clients):
+            job_queue.put(POISON_PILL)
+
         manager.shutdown()
 
 
